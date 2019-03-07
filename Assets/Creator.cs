@@ -30,16 +30,16 @@ public class Creator : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (createdCount < NumOfElements && DateTime.Now.Subtract(lastTimeCreated).TotalMilliseconds > WaitTime) 
+        if (createdCount < NumOfElements && DateTime.Now.Subtract(lastTimeCreated).TotalMilliseconds > WaitTime)
         {
             lastTimeCreated = DateTime.Now;
             createdCount++;
             var obj = Instantiate(spanee, pos.position + new Vector3((float)(RandPart.x * rand.NextDouble()), (float)(RandPart.y * rand.NextDouble()), (float)(RandPart.z * rand.NextDouble())), pos.rotation);
             obj.name = obj.name + " " + createdCount;
-            obj.tag = "particle";
+            obj.tag = Tags.PARTICLE;
             var cl = obj.AddComponent<ColliderManager>();
             cl.collisionListener = this.fea;
-            
+
             obj.transform.localScale += scaleRandomPart * (float)rand.NextDouble();
 
             obj.transform.parent = particlesContainer.transform;

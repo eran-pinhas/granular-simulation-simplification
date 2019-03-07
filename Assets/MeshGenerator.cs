@@ -105,22 +105,17 @@ public class MeshGenerator : MonoBehaviour
                         var rb = go.GetComponent<Rigidbody>();
                         rb.constraints = rb.constraints | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
                     }
+
+                    go.tag = Tags.FEM_CENTER_PARTICLE;
+
                     SingleFEAData.elements.Add(go);
                 }
                 foreach (var connection in mesh.links)
                 {
-                    //var sj = this.CreateSpring(
-                    //    SingleFEAData.elements[connection.Item1],
-                    //    SingleFEAData.elements[connection.Item2],
-                    //    spring,
-                    //    damper,
-                    //    true,
-                    //    "spring-" + connection.Item1 + "-" + connection.Item2,
-                    //    feaContainer.transform);
-
-                    //SingleFEAData.links.Add(sj);
-                    this.connectionSpringDrawer.AddConnection(SingleFEAData.elements[connection.Item1], SingleFEAData.elements[connection.Item2]);
-
+                    this.connectionSpringDrawer.AddConnection(
+                        SingleFEAData.elements[connection.Item1],
+                        SingleFEAData.elements[connection.Item2]
+                        );
                 }
                 foreach (var (polygonConnectionIndex, meshConnectionIndex) in polygonMeshLinks)
                 {
@@ -130,9 +125,17 @@ public class MeshGenerator : MonoBehaviour
                         );
                 }
 
-                var elementsToRemove = polygon.holes.SelectMany(x => x).Concat(polygon.restElements).Select(x => gameObjectsMap[x]);
+                polygon.holes
+                    .SelectMany(x => x)
+                    .Concat(polygon.restElements)
+                    .Select(x => gameObjectsMap[x])
+                    .ToList()
+                    .ForEach(x => x.SetActive(false));
 
-                elementsToRemove.ToList().ForEach(x => x.SetActive(false));
+                polygon.polygon
+                    .Select(x => gameObjectsMap[x])
+                    .ToList()
+                    .ForEach(node => node.tag = Tags.FEM_EDGE_PARTICLE);
 
                 DoneSingleFEA = true;
                 return;

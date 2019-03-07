@@ -10,7 +10,7 @@ public class ColliderManager : MonoBehaviour
 
     void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.tag == "particle")
+        if (collision.gameObject.tag == Tags.PARTICLE)
         {
             colliding.Add(collision.gameObject);
             collisionListener.informCollision(this.gameObject, collision.gameObject);
@@ -18,7 +18,7 @@ public class ColliderManager : MonoBehaviour
     }
     void OnCollisionExit(Collision collision)
     {
-        if (collision.gameObject.tag == "particle")
+        if (collision.gameObject.tag == Tags.PARTICLE)
         {
             colliding.Remove(collision.gameObject);
             collisionListener.informCollisionRemoved(this.gameObject, collision.gameObject);
