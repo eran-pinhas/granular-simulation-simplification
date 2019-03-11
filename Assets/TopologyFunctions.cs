@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 public class Mesh
 {
@@ -12,6 +13,46 @@ public class Mesh
 
 public class TopologyFunctions
 {
+    public static Matrix4x4 LinearRegression2d(List<Tuple<float, float>> x, List<Tuple<float, float>> y)
+    {
+        // https://newonlinecourses.science.psu.edu/stat501/node/382/ (except changing the vector order from [1 x1 x2...] to [x1 x2 ... 1])
+        var n = x.Count;
+        var x1Sum = x.Select(t => t.Item1).Sum();
+        var x2Sum = x.Select(t => t.Item2).Sum();
+        var x1x2Sum = x.Select(t => t.Item1 * t.Item2).Sum();
+        var x1x1Sum = x.Select(t => t.Item1 * t.Item1).Sum();
+        var x2x2Sum = x.Select(t => t.Item2 * t.Item2).Sum();
+        var xxCol1 = new Vector4(x1x1Sum, x1x2Sum, x1Sum, 0);
+        var xxCol2 = new Vector4(x1x2Sum, x2x2Sum, x2Sum, 0);
+        var xxCol3 = new Vector4(x1Sum, x2Sum, n, 0);
+        var xxCol4 = new Vector4(0, 0, 0, 1);
+        var xx = new Matrix4x4(xxCol1, xxCol2, xxCol3, xxCol4);
+        var xx_inv = xx.inverse;
+
+        var y1Sum = y.Select(t => t.Item1).Sum();
+        var y2Sum = y.Select(t => t.Item2).Sum();
+        var x1y1Sum = y.Select((t, i) => t.Item1 * x[i].Item1).Sum();
+        var x1y2Sum = y.Select((t, i) => t.Item2 * x[i].Item1).Sum();
+        var x2y1Sum = y.Select((t, i) => t.Item1 * x[i].Item2).Sum();
+        var x2y2Sum = y.Select((t, i) => t.Item2 * x[i].Item2).Sum();
+
+        var xy1Vec = xx_inv * new Vector4(x1y1Sum, x2y1Sum, y1Sum, 0);
+        var xy2Vec = xx_inv * new Vector4(x1y2Sum, x2y2Sum, y2Sum, 0);
+        var res3Vec = new Vector4(0, 0, 1, 0);
+        var res4Vec = new Vector4(0, 0, 0, 1);
+
+        return new Matrix4x4(xy1Vec, xy2Vec, res3Vec, res4Vec).transpose;
+    }
+
+
+    public static Tuple<float, float> TranformPoint(Matrix4x4 tranform, Tuple<float, float> point)
+    {
+        return Tuple.Create(
+            tranform[0, 0] * point.Item1 + tranform[0, 1] * point.Item2 + tranform[0, 2],
+            tranform[1, 0] * point.Item1 + tranform[1, 1] * point.Item2 + tranform[1, 2]
+            );
+    }
+
     public static List<T> LongestString<T>(List<List<T>> strings)
     {
         var longestString = strings.First();
@@ -34,27 +75,51 @@ public class TopologyFunctions
 
     }
 
-    public static Mesh SimpleTriangleMesh(Tuple<Tuple<float, float>, Tuple<float, float>> extent, float meshSize)
+
+    static int mod(int x, int m)
+    {
+        int r = x % m;
+        return r < 0 ? r + m : r;
+    }
+
+    public static (Mesh, (float, float)) SimpleTriangleMesh(Tuple<Tuple<float, float>, Tuple<float, float>> extent, float meshSize, ValueTuple<float, float>? forceBLCorner = null)
     {
         var xStep = meshSize;
         var yStep = meshSize * (float)Math.Sqrt(3) / 2;
 
         var ((minX, maxX), (minY, maxY)) = extent;
+
+        //if (forceBLCorner.HasValue)
+        //{
+        //    var (newMinX, newMinY) = forceBLCorner.Value;
+        //    while (newMinX > minX) newMinX -= xStep;
+        //    while (newMinY > minY) newMinY -= yStep;
+        //    minY = newMinY;
+        //    minX = newMinX;
+        //}
+
+        var startXI = (int)Math.Floor(minX / xStep);
+        var startYI = (int)Math.Floor(minY / xStep);
+
         var mesh = new Mesh();
         List<int> lastRow = null;
-        bool evenRow = true;
-        for (var y = minY; y < maxY + yStep; y += yStep)
+        for (var yi = startYI; (yi - 1) * yStep < maxY; yi++)
         {
+            var y = yi * yStep;
+            bool evenRow = yi % 2 == 0;
             List<int> currentRow = new List<int>();
-            var inixX = evenRow ? minX : minX + (xStep / 2);
-            for (var x = inixX; x < maxX + xStep; x += xStep)
+            var deltaX = evenRow ? 0 : xStep / 2;
+            for (var xi = startXI; (xi - 1) * xStep + deltaX < maxX; xi++)
             {
+                var x = xi * xStep + deltaX;
                 mesh.positions.Add(Tuple.Create(x, y));
                 var index = mesh.positions.Count - 1;
                 currentRow.Add(index);
                 var innerRowIndex = currentRow.Count - 1;
 
+                // in the same line - connect to previous
                 if (innerRowIndex > 0) mesh.links.Add(new Tuple<int, int>(index - 1, index));
+                // connections to previous line
                 if (lastRow != null)
                 {
                     if (evenRow)
@@ -69,10 +134,9 @@ public class TopologyFunctions
                     }
                 }
             }
-            evenRow = !evenRow;
             lastRow = currentRow;
         }
-        return mesh;
+        return (mesh, (minX, minY));
     }
 
     struct Point
@@ -180,7 +244,7 @@ public class TopologyFunctions
 
     public static List<ValueTuple<int, int>> ConnectOuterPolygonToMesh(List<Tuple<float, float>> polygon, Mesh mesh)
     {
-        var polygonLength = polygon.Count-1;
+        var polygonLength = polygon.Count - 1;
         var links = new List<ValueTuple<int, int>>();
 
         var lengthSquaredDict = new Dictionary<(int, int), float>();
@@ -214,7 +278,7 @@ public class TopologyFunctions
 
         var prevNodeIndex = polygonLength - 1;
         var switchNodes = new List<int>();
-        for (var i = 0; i < polygonLength ; i++)
+        for (var i = 0; i < polygonLength; i++)
         {
             if (minSumSquareDict[i] < minSumSquareDict[i + 1] && minSumSquareDict[i] < minSumSquareDict[prevNodeIndex])
             {
@@ -257,7 +321,7 @@ public class TopologyFunctions
                 {
                     var nn = twoNearestNeighborsDict[i].Item1;
                     // same nearest neighbor - only connection is the polygon & mesh nearest neighbor
-                    if (lastConnection == -1 || nn == lastConnection){}
+                    if (lastConnection == -1 || nn == lastConnection) { }
                     // othen nearest neighbor - for triangulation we need a cross link
                     else
                     {

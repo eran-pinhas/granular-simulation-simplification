@@ -133,12 +133,9 @@ public class FEA : MonoBehaviour, ICollisionListener
         reporter.reportNew(maxPull > float.MinValue ? maxPull : -1, Time.time);
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
-        int countA = -1;
         try
         {
-            var adj = CycleFinder.FindAdjacantCicles(cycles);
-            countA = adj.Count;
-
+            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].tag == Tags.FEM_EDGE_PARTICLE);
             this.meshGenerator.CreateFea(adj, childrenDict, spawnee, pos.rotation);
         }
         catch (Exception e)

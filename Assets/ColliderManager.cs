@@ -8,22 +8,37 @@ public class ColliderManager : MonoBehaviour
 
     private List<GameObject> colliding = new List<GameObject>();
 
+    private static bool IsCollide(GameObject go)
+    {
+        return (go.GetComponent<ColliderManager>() != null);
+    }
+
     void OnCollisionEnter(Collision collision)
     {
-        if (collision.gameObject.tag == Tags.PARTICLE)
+        if (IsCollide(collision.gameObject))
         {
             colliding.Add(collision.gameObject);
             collisionListener.informCollision(this.gameObject, collision.gameObject);
         }
     }
+
     void OnCollisionExit(Collision collision)
     {
-        if (collision.gameObject.tag == Tags.PARTICLE)
+        RemoveCollision(collision.gameObject);
+    }
+
+    void RemoveCollision(GameObject go)
+    {
+        if (IsCollide(gameObject))
         {
-            colliding.Remove(collision.gameObject);
-            collisionListener.informCollisionRemoved(this.gameObject, collision.gameObject);
+            colliding.Remove(gameObject);
+            if (collisionListener != null)
+            {
+                collisionListener.informCollisionRemoved(this.gameObject, go);
+            }
         }
     }
+
     public List<GameObject> getColliding()
     {
         return colliding;
@@ -32,6 +47,11 @@ public class ColliderManager : MonoBehaviour
     void OnDisable()
     {
         colliding.ForEach(x => collisionListener.informCollisionRemoved(gameObject, x));
+        colliding.ForEach(x =>
+        {
+            var cm = x.GetComponent<ColliderManager>();
+            if (cm != null) cm.RemoveCollision(this.gameObject);
+        });
         colliding.Clear();
     }
 
