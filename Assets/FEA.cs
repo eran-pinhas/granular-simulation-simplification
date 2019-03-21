@@ -135,7 +135,7 @@ public class FEA : MonoBehaviour, ICollisionListener
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
         try
         {
-            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].tag == Tags.FEM_EDGE_PARTICLE);
+            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].tag == Tags.FEM_EDGE_PARTICLE, instanceId => MeshGenerator.getGameObjectPosition(childrenDict[instanceId]));
             this.meshGenerator.CreateFea(adj, childrenDict, spawnee, pos.rotation);
         }
         catch (Exception e)

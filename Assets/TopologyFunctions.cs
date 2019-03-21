@@ -13,10 +13,10 @@ public class Mesh
 
 public class TopologyFunctions
 {
-    public static Matrix4x4 LinearRegression2d(List<Tuple<float, float>> x, List<Tuple<float, float>> y)
+    public static Matrix4x4 LinearRegression2d(IEnumerable<Tuple<float, float>> x, IEnumerable<Tuple<float, float>> y)
     {
         // https://newonlinecourses.science.psu.edu/stat501/node/382/ (except changing the vector order from [1 x1 x2...] to [x1 x2 ... 1])
-        var n = x.Count;
+        var n = x.Count();
         var x1Sum = x.Select(t => t.Item1).Sum();
         var x2Sum = x.Select(t => t.Item2).Sum();
         var x1x2Sum = x.Select(t => t.Item1 * t.Item2).Sum();
@@ -31,10 +31,10 @@ public class TopologyFunctions
 
         var y1Sum = y.Select(t => t.Item1).Sum();
         var y2Sum = y.Select(t => t.Item2).Sum();
-        var x1y1Sum = y.Select((t, i) => t.Item1 * x[i].Item1).Sum();
-        var x1y2Sum = y.Select((t, i) => t.Item2 * x[i].Item1).Sum();
-        var x2y1Sum = y.Select((t, i) => t.Item1 * x[i].Item2).Sum();
-        var x2y2Sum = y.Select((t, i) => t.Item2 * x[i].Item2).Sum();
+        var x1y1Sum = y.Zip(x, (y_i, x_i) => y_i.Item1 * x_i.Item1).Sum();
+        var x1y2Sum = y.Zip(x, (y_i, x_i) => y_i.Item2 * x_i.Item1).Sum();
+        var x2y1Sum = y.Zip(x, (y_i, x_i) => y_i.Item1 * x_i.Item2).Sum();
+        var x2y2Sum = y.Zip(x, (y_i, x_i) => y_i.Item2 * x_i.Item2).Sum();
 
         var xy1Vec = xx_inv * new Vector4(x1y1Sum, x2y1Sum, y1Sum, 0);
         var xy2Vec = xx_inv * new Vector4(x1y2Sum, x2y2Sum, y2Sum, 0);
@@ -342,6 +342,6 @@ public class TopologyFunctions
             links.Add((switchNodes[i], twoNearestNeighborsDict[switchNodes[i]].Item1));
             links.Add((switchNodes[i], twoNearestNeighborsDict[switchNodes[i]].Item2));
         }
-        return links;
+        return links.Distinct().ToList();
     }
 }
