@@ -35,6 +35,11 @@ public class ConnectionSpringDrawer : ConnectionDrawer
             springs[(a.GetInstanceID(), b.GetInstanceID())] = sj;
     }
 
+    public SpringJoint getSpringJoint(GameObject a, GameObject b)
+    {
+        return springs[(a.GetInstanceID(), b.GetInstanceID())];
+    }
+
     public override bool RemoveConnection(GameObject a, GameObject b)
     {
         if(springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID()))){

@@ -120,7 +120,7 @@ public class MeshGenerator : MonoBehaviour
                     .Concat(new List<List<int>>() {
                         SingleFEAData.currentPolygon.GetRange(0, SingleFEAData.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
                     }).ToList();
-                var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false,instanceId => getGameObjectPosition(gameObjectsMap[instanceId]));
+                var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false, instanceId => getGameObjectPosition(gameObjectsMap[instanceId]));
 
 
 
@@ -251,7 +251,7 @@ public class MeshGenerator : MonoBehaviour
                         positionsInRootRS = pos,
                     });
                 }
-                
+
                 // reorganize polygon order
                 var currentPolygonDic = new Dictionary<int, ElementGroupGameObject.PolygonElement>();
                 SingleFEAData.currentPolygon.ForEach(n => currentPolygonDic[n.instanceId] = n);
@@ -374,6 +374,39 @@ public class MeshGenerator : MonoBehaviour
                 }
             }
         }
+    }
+
+    public float MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
+    {
+        var maxPull = float.MinValue;
+        if (SingleFEAData != null)
+        {
+            SingleFEAData.innerLinks.ForEach(ij =>
+            {
+                // var con = ;
+
+                var con_spring = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
+
+                var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
+                var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
+                float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
+                float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
+
+                // push 
+                if (currentLength < anchorLength)
+                {
+                    //float force = (anchorLength - currentLength) * con_spring.spring;
+
+                }
+                // pull
+                else
+                {
+                    float force = (currentLength - anchorLength) * con_spring.spring;
+                    if (force > maxPull) maxPull = force;
+                }
+            });
+        }
+        return maxPull;
     }
 
     private GameObject CreateInnerMesh(Tuple<float, float> position, GameObject spawnee, Quaternion spawneeRotation, Transform transform)
