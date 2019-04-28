@@ -12,13 +12,12 @@ public class FEA : MonoBehaviour, ICollisionListener
 
     public GameObject spawnee;
     public Transform pos;
-    public Vector3 a, b, collisionRenderOffset;
-    public float spring;
-    public float damper;
-    public bool allowRoration;
-    public bool plotLine;
-    public float coloringMaxPush;
-    public float coloringMaxPull;
+    //public float spring;
+    //public float damper;
+    //public bool allowRoration;
+    //public bool plotLine;
+    //public float coloringMaxPush;
+    //public float coloringMaxPull;
     public Reporter reporter;
     public MeshGenerator meshGenerator;
     public ConnectionDrawer connectionDrawer;
@@ -32,11 +31,7 @@ public class FEA : MonoBehaviour, ICollisionListener
     private List<GameObject> children = new List<GameObject>();
     private Dictionary<int, GameObject> childrenDict = new Dictionary<int, GameObject>();
     private List<GameObject> lines = new List<GameObject>();
-
-    //private const float pushHColor = 0.666f;
-    //private const float pullHColor = 0;
-
-    // Start is called before the first frame update
+    
     void Start()
     {
         new GameObject("FEA_data");

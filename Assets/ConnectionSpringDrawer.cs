@@ -25,28 +25,62 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     {
         base.AddConnection(a, b);
 
-        var sj = a.AddComponent<SpringJoint>();
-        sj.connectedBody = b.GetComponent<Rigidbody>();
-        sj.spring = this.spring;
-        sj.damper = this.damp;
-
         if (!springs.ContainsKey((b.GetInstanceID(), a.GetInstanceID())) &&
             !springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
+        {
+            var sj = a.AddComponent<SpringJoint>();
+            sj.connectedBody = b.GetComponent<Rigidbody>();
+            sj.spring = this.spring;
+            sj.damper = this.damp;
             springs[(a.GetInstanceID(), b.GetInstanceID())] = sj;
+        }
     }
+
+
+    public void AddConnectionWithAnchor(GameObject a, GameObject b, Tuple<float, float> aPos, Tuple<float, float> bPos)
+    {
+        this.AddConnection(a, b);
+
+        SpringJoint sj;
+        if (springs.ContainsKey((b.GetInstanceID(), a.GetInstanceID())))
+        {
+            sj = springs[(b.GetInstanceID(), a.GetInstanceID())];
+        }
+        else
+        {
+            sj = springs[(a.GetInstanceID(), b.GetInstanceID())];
+        }
+
+        var baseObjectTransform = a.gameObject.GetComponent<Transform>();
+
+        var anchor = new Vector3((bPos.Item1 - aPos.Item1) / baseObjectTransform.lossyScale.x, 0, (bPos.Item2 - aPos.Item2) / baseObjectTransform.lossyScale.z);
+        anchor = Vector3.Scale(anchor, baseObjectTransform.lossyScale);
+
+        sj.anchor = Vector3.zero;
+        sj.connectedAnchor = anchor;
+    }
+
 
     public SpringJoint getSpringJoint(GameObject a, GameObject b)
     {
-        return springs[(a.GetInstanceID(), b.GetInstanceID())];
+        if (springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
+        {
+            return springs[(a.GetInstanceID(), b.GetInstanceID())];
+        }
+        else
+        {
+            return springs[(b.GetInstanceID(), a.GetInstanceID())];
+        }
     }
 
     public override bool RemoveConnection(GameObject a, GameObject b)
     {
-        if(springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID()))){
+        if (springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
+        {
             Destroy(springs[(a.GetInstanceID(), b.GetInstanceID())]);
             springs.Remove((a.GetInstanceID(), b.GetInstanceID()));
         }
         return base.RemoveConnection(a, b);
-        
+
     }
 }

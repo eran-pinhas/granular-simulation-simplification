@@ -57,9 +57,10 @@ public class MeshGenerator : MonoBehaviour
     public float damper;
     public bool allowRotation;
     public float meshSize;
+    public float bufferInside;
     public int minStringSize;
 
-    public static Mesh PolygonToMesh(List<Tuple<float, float>> polygonPositions, float meshSize)
+    public static Mesh PolygonToMesh(List<Tuple<float, float>> polygonPositions, float meshSize, float bufferInside)
     {
         var extent = TopologyFunctions.ExtactExtent(polygonPositions);
 
@@ -67,7 +68,7 @@ public class MeshGenerator : MonoBehaviour
         var indicesToStay = new Dictionary<int, int>();
         var newIndex = 0;
         for (var i = 0; i < mesh.positions.Count; i++)
-            if (TopologyFunctions.PointInPolygon(polygonPositions, mesh.positions[i]))
+            if (TopologyFunctions.PointInPolygon(polygonPositions, mesh.positions[i], bufferInside))
                 indicesToStay[i] = newIndex++;
 
         mesh.positions = mesh.positions.Where((pos, i) => indicesToStay.ContainsKey(i)).ToList();
@@ -143,7 +144,7 @@ public class MeshGenerator : MonoBehaviour
                 var tranformMatrixInv = tranformMatrix.inverse;
 
                 var newPolygonPositions_t = newPolygonPositions.Select(pos => TopologyFunctions.TranformPoint(tranformMatrixInv, pos)).ToList();
-                var mesh_t = PolygonToMesh(newPolygonPositions_t, meshSize);
+                var mesh_t = PolygonToMesh(newPolygonPositions_t, meshSize, bufferInside);
                 var polygonMeshLinks = TopologyFunctions.ConnectOuterPolygonToMesh(newPolygonPositions, mesh_t);
 
                 // we need to understand :
@@ -277,7 +278,7 @@ public class MeshGenerator : MonoBehaviour
                         toPoint = p2,
                         objs = (p1GO, p2GO),
                     });
-                    this.connectionSpringDrawer.AddConnection(p1GO, p2GO);
+                    this.connectionSpringDrawer.AddConnectionWithAnchor(p1GO, p2GO, p1, p2);
                 }
                 // (4)
                 foreach (var (goId, meshElemPos) in outerLinks_add)
@@ -304,7 +305,7 @@ public class MeshGenerator : MonoBehaviour
                     List<GameObject> polygonGameObjects = polygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
                     List<Tuple<float, float>> polygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
 
-                    var mesh = PolygonToMesh(polygonPositions, meshSize);
+                    var mesh = PolygonToMesh(polygonPositions, meshSize, bufferInside);
 
                     if (polygon.restElements.Count * 1.5 < polygon.polygon.Count)
                         return;
@@ -333,9 +334,11 @@ public class MeshGenerator : MonoBehaviour
                             toPoint = toPoint,
                             objs = (SingleFEAData.innerMeshElements[fromPoint], SingleFEAData.innerMeshElements[toPoint]),
                         });
-                        this.connectionSpringDrawer.AddConnection(
+                        this.connectionSpringDrawer.AddConnectionWithAnchor(
                             SingleFEAData.innerMeshElements[fromPoint],
-                            SingleFEAData.innerMeshElements[toPoint]
+                            SingleFEAData.innerMeshElements[toPoint],
+                            fromPoint,
+                            toPoint
                             );
                     }
                     foreach (var (polygonConnectionIndex, meshConnectionIndex) in polygonMeshLinks)
@@ -376,6 +379,16 @@ public class MeshGenerator : MonoBehaviour
         }
     }
 
+    private static float GetForce(SpringJoint con_spring)
+    {
+        var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
+        var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
+        float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
+        float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
+
+        return (currentLength - anchorLength) * con_spring.spring;
+    }
+
     public float MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
     {
         var maxPull = float.MinValue;
@@ -383,31 +396,69 @@ public class MeshGenerator : MonoBehaviour
         {
             SingleFEAData.innerLinks.ForEach(ij =>
             {
-                // var con = ;
-
                 var con_spring = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
-
-                var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
-                var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
-                float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
-                float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
-
+                var force = GetForce(con_spring);
+                var col = Color.green;
                 // push 
-                if (currentLength < anchorLength)
+                if (force < 0) 
                 {
-                    //float force = (anchorLength - currentLength) * con_spring.spring;
-
+                    
                 }
                 // pull
                 else
                 {
-                    float force = (currentLength - anchorLength) * con_spring.spring;
+                    float colorS = Mathf.Min(1, force / 1000);
+                    col = Color.HSVToRGB(0, colorS, 1);
+
+                    if (force > maxPull)
+                    {
+                        maxPull = force;
+                    }
+
                     if (force > maxPull) maxPull = force;
                 }
+                connectionSpringDrawer.SetColor(ij.objs.Item1, ij.objs.Item2, col);
             });
         }
         return maxPull;
     }
+
+   /* public void CalculateCrack((Tuple<float, float>, Tuple<float, float>) crackStart) // Dictionary<int, GameObject> gameObjectsMap
+    {
+        if (SingleFEAData != null)
+        {
+            var innerLinksDic = new Dictionary<(Tuple<float, float>, Tuple<float, float>), SpringJoint>();
+            SingleFEAData.innerLinks.ForEach(ij =>
+            {
+                var sj = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
+                innerLinksDic[(ij.fromPoint, ij.toPoint)] = sj;
+                innerLinksDic[(ij.toPoint, ij.fromPoint)] = sj;
+            });
+
+            var done = false;
+            var (p1, p2) = crackStart;
+            while (!done) 
+            {
+                var p3 = Tuple.Create((float)((p1.Item1 + p2.Item1) / 2 - (p2.Item2 - p1.Item2) * Math.Sqrt(3) / 2), (float)((p1.Item2 + p2.Item2) / 2 + (p2.Item1 - p1.Item1) * Math.Sqrt(3) / 2));
+
+                if (!SingleFEAData.innerMeshElements.ContainsKey(p3))
+                {
+                    done = true;
+                }
+                else
+                {
+                    // var elem3 = SingleFEAData.innerMeshElements[p3];
+                    var force13 = GetForce(innerLinksDic[(p1, p3)]);
+                    var force12 = GetForce(innerLinksDic[(p1, p2)]);
+                    if(force12 > force13)
+                    {
+
+                    }
+                }
+
+            }
+        }
+    }*/
 
     private GameObject CreateInnerMesh(Tuple<float, float> position, GameObject spawnee, Quaternion spawneeRotation, Transform transform)
     {

@@ -462,7 +462,7 @@ Camera:
   far clip plane: 1000
   field of view: 23.8
   orthographic: 1
-  orthographic size: 30.34
+  orthographic size: 24.63
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -1282,15 +1282,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   spawnee: {fileID: 2071503224184193714, guid: 751c9bb0b2d1a274ca770f684c95b14a, type: 3}
   pos: {fileID: 1147541089}
-  a: {x: 1.5, y: 0, z: 0}
-  b: {x: 0, y: 1.5, z: 0}
-  collisionRenderOffset: {x: 0, y: 0, z: -5.3}
-  spring: 10000
-  damper: 0.2
-  allowRoration: 0
-  plotLine: 1
-  coloringMaxPush: 1000
-  coloringMaxPull: 100
   reporter: {fileID: 2097349680}
   meshGenerator: {fileID: 2097349681}
   connectionDrawer: {fileID: 2097349682}
@@ -1322,9 +1313,10 @@ MonoBehaviour:
   connectionSpringDrawer: {fileID: 2097349684}
   placementZ: 0
   spring: 30000
-  damper: 0.4
+  damper: 30000
   allowRotation: 0
-  meshSize: 3.51
+  meshSize: 3.5
+  bufferInside: 0.55
   minStringSize: 70
 --- !u!114 &2097349682
 MonoBehaviour:
@@ -1369,4 +1361,4 @@ MonoBehaviour:
   ColorStresses: 0
   drawOffset: {x: 0, y: 0, z: -0.51}
   spring: 10000
-  damp: 0.2
+  damp: 20

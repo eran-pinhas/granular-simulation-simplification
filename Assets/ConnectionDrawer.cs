@@ -15,7 +15,7 @@ public class ConnectionDrawer : MonoBehaviour
 
     virtual public void AddConnection(GameObject a, GameObject b)
     {
-        var line = new GameObject("drawed-" + Guid.NewGuid().ToString("N").Substring(0,6));
+        var line = new GameObject("drawed-" + Guid.NewGuid().ToString("N").Substring(0, 6));
         var lr = line.AddComponent<LineRenderer>();
         lr.startWidth = 0.05f;
         lr.endWidth = 0.05f;
@@ -25,6 +25,12 @@ public class ConnectionDrawer : MonoBehaviour
         connections.Add((a.GetInstanceID(), b.GetInstanceID()), line);
         objects[b.GetInstanceID()] = b;
         objects[a.GetInstanceID()] = a;
+    }
+
+    public void SetColor(GameObject a, GameObject b, Color color)
+    {
+        var lr = connections[(a.GetInstanceID(), b.GetInstanceID())].GetComponent<LineRenderer>();
+        lr.material.color = color;
     }
 
     virtual public bool RemoveConnection(GameObject a, GameObject b)

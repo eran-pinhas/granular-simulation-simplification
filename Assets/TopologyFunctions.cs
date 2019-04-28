@@ -201,13 +201,18 @@ public class TopologyFunctions
     }
 
     // Returns true if the point p lies inside the polygon[] with n vertices 
-    public static bool PointInPolygon(List<Tuple<float, float>> inPolygon, Tuple<float, float> pIn)
+    public static bool PointInPolygon(List<Tuple<float, float>> inPolygon, Tuple<float, float> pIn, float bufferInside)
     {
+
+        var bufferInsideSquared = bufferInside * bufferInside;
         int n = inPolygon.Count;
         var polygon = inPolygon.Select(t => new Point() { x = t.Item1, y = t.Item2 }).ToList();
         var p = new Point() { x = pIn.Item1, y = pIn.Item2 };
         // There must be at least 3 vertices in polygon[] 
         if (n < 3) return false;
+
+        if (inPolygon.Any(pNode => DistanceSquared(pNode, pIn) < bufferInsideSquared))
+            return false;
 
         // Create a point for line segment from p to infinite 
         Point extreme = new Point() { x = 100000000, y = p.y };
