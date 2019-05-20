@@ -18,7 +18,8 @@ public class MeshGenerator : MonoBehaviour
         Vector3 vec3 = new Vector3(pos.Item1, pos.Item2, go.transform.position.z);
         go.transform.position = vec3;
     }
-    class ElementGroupGameObject
+
+    public class ElementGroupGameObject
     {
         public class HiddenNodes
         {
@@ -44,11 +45,20 @@ public class MeshGenerator : MonoBehaviour
             public Tuple<float, float> positionsInRootRS; // ReferenceSystem
         }
 
+        public enum STATUS
+        {
+            FREE = 0,
+            CRACKING = 1,
+        }
+
         public List<HiddenNodes> hiddenNodes = new List<HiddenNodes>();
         public List<OuterSpringJoint> outerLinks = new List<OuterSpringJoint>();
         public List<InnerSpringJoint> innerLinks = new List<InnerSpringJoint>();
         public Dictionary<Tuple<float, float>, GameObject> innerMeshElements = new Dictionary<Tuple<float, float>, GameObject>();
         public List<PolygonElement> currentPolygon;
+        public STATUS status = STATUS.FREE;
+        public LineDrawer LineDrawer = new LineDrawer(new Vector3(0, 0, -10));
+        
     }
 
     public ConnectionSpringDrawer connectionSpringDrawer;
@@ -59,6 +69,8 @@ public class MeshGenerator : MonoBehaviour
     public float meshSize;
     public float bufferInside;
     public int minStringSize;
+    public float isRounded_Size;
+    public float isRounded_Ratio;
 
     public static Mesh PolygonToMesh(List<Tuple<float, float>> polygonPositions, float meshSize, float bufferInside)
     {
@@ -108,6 +120,9 @@ public class MeshGenerator : MonoBehaviour
         var feaContainer = GameObject.Find("FEA_data");
         if (SingleFEAData != null)
         {
+            if (SingleFEAData.status == ElementGroupGameObject.STATUS.CRACKING)
+                return;
+
             //if (tries > 0) return;
             var FEMpolygons = polygons.Where(p => p.isTouchingExistingFEM);
             foreach (var touchingPolygon in polygons.Where(p => p.isTouchingExistingFEM))
@@ -136,6 +151,9 @@ public class MeshGenerator : MonoBehaviour
 
                 List<GameObject> polygonGameObjects = unifiedPolygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
                 List<Tuple<float, float>> newPolygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
+
+                if (!TopologyFunctions.IsRounded(newPolygonPositions, isRounded_Size, isRounded_Ratio))
+                    continue;
 
                 var polygonLastPositions = SingleFEAData.currentPolygon.Select(x => x.positionsInRootRS);
                 var polygonCurrentPositions = SingleFEAData.currentPolygon.Select(node => getGameObjectPosition(gameObjectsMap[node.instanceId]));
@@ -377,6 +395,9 @@ public class MeshGenerator : MonoBehaviour
                 }
             }
         }
+
+        if(SingleFEAData != null)
+            SingleFEAData.LineDrawer.setPoints(SingleFEAData.currentPolygon.Select(x => gameObjectsMap[x.instanceId]));
     }
 
     private static float GetForce(SpringJoint con_spring)
@@ -389,9 +410,10 @@ public class MeshGenerator : MonoBehaviour
         return (currentLength - anchorLength) * con_spring.spring;
     }
 
-    public float MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
+    public (ElementGroupGameObject.InnerSpringJoint, float) MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
     {
         var maxPull = float.MinValue;
+        ElementGroupGameObject.InnerSpringJoint innerJoint = null;
         if (SingleFEAData != null)
         {
             SingleFEAData.innerLinks.ForEach(ij =>
@@ -400,7 +422,11 @@ public class MeshGenerator : MonoBehaviour
                 var force = GetForce(con_spring);
                 var col = Color.green;
                 // push 
-                if (force < 0) 
+                if(connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID())))
+                {
+                    col = Color.yellow;
+                }
+                else if (force < 0) 
                 {
                     
                 }
@@ -412,6 +438,7 @@ public class MeshGenerator : MonoBehaviour
 
                     if (force > maxPull)
                     {
+                        innerJoint = ij;
                         maxPull = force;
                     }
 
@@ -420,7 +447,21 @@ public class MeshGenerator : MonoBehaviour
                 connectionSpringDrawer.SetColor(ij.objs.Item1, ij.objs.Item2, col);
             });
         }
-        return maxPull;
+        return (innerJoint, maxPull);
+    }
+
+    public void StartCrackPropagation(ElementGroupGameObject.InnerSpringJoint ij)
+    {
+        if (SingleFEAData.status != ElementGroupGameObject.STATUS.CRACKING)
+        {
+            SingleFEAData.status = ElementGroupGameObject.STATUS.CRACKING;
+
+            Debug.Log("StartCrackPropagation");
+
+            connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
+            //SingleFEAData.innerLinks.Remove(ij);
+            //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
+        }
     }
 
    /* public void CalculateCrack((Tuple<float, float>, Tuple<float, float>) crackStart) // Dictionary<int, GameObject> gameObjectsMap
@@ -460,6 +501,7 @@ public class MeshGenerator : MonoBehaviour
         }
     }*/
 
+
     private GameObject CreateInnerMesh(Tuple<float, float> position, GameObject spawnee, Quaternion spawneeRotation, Transform transform)
     {
         var go = Instantiate(spawnee, new Vector3(position.Item1, position.Item2, placementZ), spawneeRotation, transform);
@@ -468,6 +510,7 @@ public class MeshGenerator : MonoBehaviour
         if (!allowRotation)
         {
             var rb = go.GetComponent<Rigidbody>();
+            // if(rb)
             rb.constraints = rb.constraints | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
         }
 
@@ -478,6 +521,7 @@ public class MeshGenerator : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-
+        if(SingleFEAData != null)
+        SingleFEAData.LineDrawer.updatePositions();   
     }
 };

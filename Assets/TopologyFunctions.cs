@@ -200,6 +200,22 @@ public class TopologyFunctions
         return false; // Doesn't fall in any of the above cases 
     }
 
+    public static bool IsRounded(List<Tuple<float,float>> poly, float particleSize, float minRatio = 0.2f)
+    {
+        var l = poly.Count;
+        if (poly.Last().Equals(poly.First())) l--;
+        for (var i = 0; i < l; i++)
+        {
+            for (var j = i + 1; j < l; j++) 
+            {
+                double perfectRoundDistance = (l * particleSize / Math.PI) * Math.Sin((j - i) * Math.PI / l);
+                if (Distance(poly[i], poly[j]) < minRatio * perfectRoundDistance)
+                    return false;
+            }
+        }
+        return true;
+    }
+
     // Returns true if the point p lies inside the polygon[] with n vertices 
     public static bool PointInPolygon(List<Tuple<float, float>> inPolygon, Tuple<float, float> pIn, float bufferInside)
     {
@@ -245,6 +261,10 @@ public class TopologyFunctions
     private static float DistanceSquared(Tuple<float, float> a, Tuple<float, float> b)
     {
         return ((a.Item1 - b.Item1) * (a.Item1 - b.Item1) + (a.Item2 - b.Item2) * (a.Item2 - b.Item2));
+    }
+    private static float Distance(Tuple<float, float> a, Tuple<float, float> b)
+    {
+        return (float)Math.Sqrt(DistanceSquared(a, b));
     }
 
     public static List<ValueTuple<int, int>> ConnectOuterPolygonToMesh(List<Tuple<float, float>> polygon, Mesh mesh)

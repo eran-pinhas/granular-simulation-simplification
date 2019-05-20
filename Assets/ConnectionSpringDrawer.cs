@@ -9,6 +9,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     public float damp;
 
     Dictionary<(int, int), SpringJoint> springs = new Dictionary<(int, int), SpringJoint>();
+    List<(int, int)> eliminated = new List<(int, int)>();
     // Start is called before the first frame update
     public override void Start()
     {
@@ -71,6 +72,25 @@ public class ConnectionSpringDrawer : ConnectionDrawer
         {
             return springs[(b.GetInstanceID(), a.GetInstanceID())];
         }
+    }
+
+    public List<(int,int)> getEliminated()
+    {
+        return eliminated;
+    }
+    public void eliminateSpringJoint(GameObject a, GameObject b)
+        {
+            var sj = getSpringJoint(a,b);
+        sj.damper = 0;
+        sj.spring = 0;
+
+        var t = (a.GetInstanceID(), b.GetInstanceID());
+        if (!springs.ContainsKey(t)) 
+        {
+            t = (b.GetInstanceID(), a.GetInstanceID());
+        }
+        eliminated.Add(t);
+        
     }
 
     public override bool RemoveConnection(GameObject a, GameObject b)

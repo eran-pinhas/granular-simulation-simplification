@@ -10,7 +10,7 @@ public class ConnectionDrawer : MonoBehaviour
     Dictionary<(int, int), GameObject> connections = new Dictionary<(int, int), GameObject>();
     Dictionary<int, GameObject> objects = new Dictionary<int, GameObject>();
 
-    public bool ColorStresses;
+    //public bool ColorStresses;
     public Vector3 drawOffset;
 
     virtual public void AddConnection(GameObject a, GameObject b)

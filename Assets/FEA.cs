@@ -12,15 +12,10 @@ public class FEA : MonoBehaviour, ICollisionListener
 
     public GameObject spawnee;
     public Transform pos;
-    //public float spring;
-    //public float damper;
-    //public bool allowRoration;
-    //public bool plotLine;
-    //public float coloringMaxPush;
-    //public float coloringMaxPull;
     public Reporter reporter;
     public MeshGenerator meshGenerator;
     public ConnectionDrawer connectionDrawer;
+    public float MaxForce;
 
     private Quaternion rot;
     private List<Vector3> positions;
@@ -39,9 +34,13 @@ public class FEA : MonoBehaviour, ICollisionListener
 
     void Update()
     {
-        float maxPull = meshGenerator.MonitorMesh(childrenDict);
-        
+        var (maxPullJoint, maxPull) = meshGenerator.MonitorMesh(childrenDict);
         reporter.reportNew(maxPull > float.MinValue ? maxPull : -1, Time.time);
+
+        if (maxPull > MaxForce)
+        {
+            meshGenerator.StartCrackPropagation(maxPullJoint);
+        }
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
         try
