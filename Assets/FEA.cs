@@ -16,16 +16,9 @@ public class FEA : MonoBehaviour, ICollisionListener
     public MeshGenerator meshGenerator;
     public ConnectionDrawer connectionDrawer;
     public float MaxForce;
-
-    private Quaternion rot;
-    private List<Vector3> positions;
-    private List<Vector2Int> connections;
-    private List<SpringJoint> connections_spring = new List<SpringJoint>();
-    private List<GameObject> objects = new List<GameObject>();
     
     private List<GameObject> children = new List<GameObject>();
     private Dictionary<int, GameObject> childrenDict = new Dictionary<int, GameObject>();
-    private List<GameObject> lines = new List<GameObject>();
     
     void Start()
     {
