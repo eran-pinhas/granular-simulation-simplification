@@ -35,7 +35,7 @@ public class Creator : MonoBehaviour
             lastTimeCreated = DateTime.Now;
             createdCount++;
             var obj = Instantiate(spanee, pos.position + new Vector3((float)(RandPart.x * rand.NextDouble()), (float)(RandPart.y * rand.NextDouble()), (float)(RandPart.z * rand.NextDouble())), pos.rotation);
-            obj.name = String.Format("{} {}", obj.name, createdCount);
+            obj.name = String.Format("{0} {1}", obj.name, createdCount);
             obj.tag = Tags.PARTICLE;
             var cl = obj.AddComponent<ColliderManager>();
             cl.collisionListener = this.fea;

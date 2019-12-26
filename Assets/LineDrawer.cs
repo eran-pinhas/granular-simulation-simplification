@@ -15,7 +15,7 @@ public class LineDrawer
 
     LineRenderer lr;
     Vector3 shift;
-    public LineDrawer(Vector3 shift)
+    public LineDrawer(Vector3 shift , Color color)
     {
         this.shift = shift;
 
@@ -23,8 +23,9 @@ public class LineDrawer
         lr = line.AddComponent<LineRenderer>();
         lr.startWidth = 0.5f;
         lr.endWidth = 0.5f;
-        lr.startColor = Color.black;
-        lr.endColor = Color.black;
+        lr.startColor = color;
+        lr.endColor = color;
+        lr.material.color = color;
 
         line.transform.parent = GameObject.Find("DrawedLines").transform;
     }

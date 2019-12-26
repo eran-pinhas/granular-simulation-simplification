@@ -57,8 +57,15 @@ public class MeshGenerator : MonoBehaviour
         public Dictionary<Tuple<float, float>, GameObject> innerMeshElements = new Dictionary<Tuple<float, float>, GameObject>();
         public List<PolygonElement> currentPolygon;
         public STATUS status = STATUS.FREE;
-        public LineDrawer LineDrawer = new LineDrawer(new Vector3(0, 0, -10));
-        
+        public LineDrawer lineDrawer;
+
+        public Color color;
+
+        public ElementGroupGameObject()
+        {
+            color = Color.HSVToRGB(UnityEngine.Random.value, 0.73f, 0.96f);
+            lineDrawer = new LineDrawer(new Vector3(0, 0, -10), color);
+        }
     }
 
     public ConnectionSpringDrawer connectionSpringDrawer;
@@ -69,9 +76,7 @@ public class MeshGenerator : MonoBehaviour
     public float meshSize;
     public float bufferInside;
     public int minStringSize;
-    public float isRounded_Size;
-    public float isRounded_Ratio;
-
+    public float PPTestMin;
     public static Mesh PolygonToMesh(List<Tuple<float, float>> polygonPositions, float meshSize, float bufferInside)
     {
         var extent = TopologyFunctions.ExtactExtent(polygonPositions);
@@ -96,7 +101,7 @@ public class MeshGenerator : MonoBehaviour
 
     }
 
-    private ElementGroupGameObject SingleFEAData = null;
+    private List<ElementGroupGameObject> FEAs = new List<ElementGroupGameObject>();
 
     private (Tuple<float, float>, Tuple<float, float>) StringifyNodesLink(Tuple<float, float> pos1, Tuple<float, float> pos2) // (Mesh mesh, Tuple<int, int> link)
     {
@@ -118,15 +123,18 @@ public class MeshGenerator : MonoBehaviour
         )
     {
         var feaContainer = GameObject.Find("FEA_data");
-        if (SingleFEAData != null)
+        var changed = false;
+
+        // Maintain existing FEAs
+
+        FEAs.ForEach(fea =>
         {
-            if (SingleFEAData.status == ElementGroupGameObject.STATUS.CRACKING)
+            if (fea.status == ElementGroupGameObject.STATUS.CRACKING)
                 return;
 
-            //if (tries > 0) return;
-            var FEMpolygons = polygons.Where(p => p.isTouchingExistingFEM);
             foreach (var touchingPolygon in polygons.Where(p => p.isTouchingExistingFEM))
             {
+                if (changed) return;
                 //  if (tries > 0) return;
 
                 if (touchingPolygon.sourceCycles.Count < 5) continue;
@@ -134,7 +142,7 @@ public class MeshGenerator : MonoBehaviour
                 //Debug.Log(SingleFEAData.currentPolygon.GetRange(0, SingleFEAData.currentPolygon.Count - 1).Select(x => x.instanceId).ToList());
                 var unifiedCycles = touchingPolygon.sourceCycles
                     .Concat(new List<List<int>>() {
-                        SingleFEAData.currentPolygon.GetRange(0, SingleFEAData.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
+                        fea.currentPolygon.GetRange(0, fea.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
                     }).ToList();
                 var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false, instanceId => getGameObjectPosition(gameObjectsMap[instanceId]));
 
@@ -152,11 +160,11 @@ public class MeshGenerator : MonoBehaviour
                 List<GameObject> polygonGameObjects = unifiedPolygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
                 List<Tuple<float, float>> newPolygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
 
-                if (!TopologyFunctions.IsRounded(newPolygonPositions, isRounded_Size, isRounded_Ratio))
+                if (TopologyFunctions.PolsbyPopper(newPolygonPositions) < PPTestMin)
                     continue;
 
-                var polygonLastPositions = SingleFEAData.currentPolygon.Select(x => x.positionsInRootRS);
-                var polygonCurrentPositions = SingleFEAData.currentPolygon.Select(node => getGameObjectPosition(gameObjectsMap[node.instanceId]));
+                var polygonLastPositions = fea.currentPolygon.Select(x => x.positionsInRootRS);
+                var polygonCurrentPositions = fea.currentPolygon.Select(node => getGameObjectPosition(gameObjectsMap[node.instanceId]));
 
                 var tranformMatrix = TopologyFunctions.LinearRegression2d(polygonLastPositions, polygonCurrentPositions);
                 var tranformMatrixInv = tranformMatrix.inverse;
@@ -172,62 +180,78 @@ public class MeshGenerator : MonoBehaviour
                 //    which polygon-inner links should be added & removed  (4)
 
                 // (1)
-                var currentPolygonIds = SingleFEAData.currentPolygon.Select(n => n.instanceId);
+                var currentPolygonIds = fea.currentPolygon.Select(n => n.instanceId);
                 var polygonNode_add = unifiedPolygon.polygon.Except(currentPolygonIds);
                 var polygonNode_remove = currentPolygonIds.Except(unifiedPolygon.polygon);
                 var restElements_remove = unifiedPolygon.getNonPolygonElements().Except(currentPolygonIds);
 
                 // (2)
-                var prev_pos = SingleFEAData.innerMeshElements.Select(x => x.Key);
+                var prev_pos = fea.innerMeshElements.Select(x => x.Key);
                 var new_pos = mesh_t.positions;
                 var innerMesh_add = new_pos.Except(prev_pos);
                 var innerMesh_remove = prev_pos.Except(new_pos);
 
                 // (3)
                 // similar links need to be distinguished by their's position (and not index)
-                var stringifiedExistingInnerLinks = SingleFEAData.innerLinks.Select(x => StringifyNodesLink(x.fromPoint, x.toPoint));
+                var stringifiedExistingInnerLinks = fea.innerLinks.Select(x => StringifyNodesLink(x.fromPoint, x.toPoint));
                 var stringifiedNewInnerLinks = mesh_t.links.Select(x => StringifyNodesLink(mesh_t.positions[x.Item1], mesh_t.positions[x.Item2]));
                 var innerLinks_add = stringifiedNewInnerLinks.Except(stringifiedExistingInnerLinks);
                 var innerLinks_remove = stringifiedExistingInnerLinks.Except(stringifiedNewInnerLinks);
 
                 // (4)
-                var stringifiedExistingOuterLinks = SingleFEAData.outerLinks.Select(x => (x.fromObject.GetInstanceID(), x.toPoint));
+                var stringifiedExistingOuterLinks = fea.outerLinks.Select(x => (x.fromObject.GetInstanceID(), x.toPoint));
                 var stringifiedNewOuterLinks = polygonMeshLinks.Select(link => (polygonGameObjects[link.Item1].GetInstanceID(), mesh_t.positions[link.Item2]));
                 var outerLinks_add = stringifiedNewOuterLinks.Except(stringifiedExistingOuterLinks);
                 var outerLinks_remove = stringifiedExistingOuterLinks.Except(stringifiedNewOuterLinks);
 
 
+                if (polygonNode_add.Any() ||
+                            polygonNode_remove.Any() ||
+                            restElements_remove.Any() ||
+                            innerMesh_add.Any() ||
+                            innerMesh_remove.Any() ||
+                            innerLinks_add.Any() ||
+                            innerLinks_remove.Any() ||
+                            outerLinks_add.Any() ||
+                            outerLinks_remove.Any()
+                ) changed = true;
+                else
+                {
+                    UnityEngine.Debug.Log("no changes recorded");
+                    continue;
+                }
+
                 // (4)
                 foreach (var (polygonElemId, meshElemPos) in outerLinks_remove.ToList())
                 {
                     var polygonGO = gameObjectsMap[polygonElemId];
-                    var linkToRemove = SingleFEAData.outerLinks.First(j => j.fromObject == polygonGO && j.toPoint == meshElemPos);
+                    var linkToRemove = fea.outerLinks.First(j => j.fromObject == polygonGO && j.toPoint == meshElemPos);
 
                     this.connectionSpringDrawer.RemoveConnection(linkToRemove.objs.Item1, linkToRemove.objs.Item2);
 
-                    SingleFEAData.outerLinks.Remove(linkToRemove);
+                    fea.outerLinks.Remove(linkToRemove);
                 }
                 // (3)
                 foreach (var (p1, p2) in innerLinks_remove.ToList())
                 {
-                    var linkToRemove = SingleFEAData.innerLinks.First(j => (j.fromPoint == p1 && j.toPoint == p2) || (j.fromPoint == p2 && j.toPoint == p1));
+                    var linkToRemove = fea.innerLinks.First(j => (j.fromPoint == p1 && j.toPoint == p2) || (j.fromPoint == p2 && j.toPoint == p1));
 
                     this.connectionSpringDrawer.RemoveConnection(linkToRemove.objs.Item1, linkToRemove.objs.Item2);
 
-                    SingleFEAData.innerLinks.Remove(linkToRemove);
+                    fea.innerLinks.Remove(linkToRemove);
                 }
                 // (2)
                 foreach (var innerMashPos in innerMesh_remove.ToList())
                 {
-                    var go = SingleFEAData.innerMeshElements[innerMashPos];
+                    var go = fea.innerMeshElements[innerMashPos];
                     Destroy(go);
-                    SingleFEAData.innerMeshElements.Remove(innerMashPos);
+                    fea.innerMeshElements.Remove(innerMashPos);
                 }
                 // (1)
                 foreach (var go in polygonNode_remove.Select(nodeId => gameObjectsMap[nodeId]))
                 {
                     go.SetActive(false);
-                    SingleFEAData.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
+                    fea.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
                     {
                         gameObject = go,
                         lastPosition = TopologyFunctions.TranformPoint(tranformMatrixInv, getGameObjectPosition(go)),
@@ -237,7 +261,7 @@ public class MeshGenerator : MonoBehaviour
                 {
                     var go = gameObjectsMap[instanceId];
                     go.SetActive(false);
-                    SingleFEAData.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
+                    fea.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
                     {
                         gameObject = go,
                         lastPosition = TopologyFunctions.TranformPoint(tranformMatrixInv, getGameObjectPosition(go)),
@@ -251,11 +275,11 @@ public class MeshGenerator : MonoBehaviour
                     go.tag = Tags.FEM_EDGE_PARTICLE;
 
                     Tuple<float, float> pos = null;
-                    SingleFEAData.hiddenNodes.Where(n => n.gameObject == go).ToList().ForEach(hiddenNode =>
+                    fea.hiddenNodes.Where(n => n.gameObject == go).ToList().ForEach(hiddenNode =>
                     {
                         setGameObjectPosition(go, TopologyFunctions.TranformPoint(tranformMatrix, hiddenNode.lastPosition));
                         pos = hiddenNode.lastPosition;
-                        SingleFEAData.hiddenNodes.Remove(hiddenNode);
+                        fea.hiddenNodes.Remove(hiddenNode);
                         go.SetActive(true);
                     });
 
@@ -264,7 +288,7 @@ public class MeshGenerator : MonoBehaviour
                         pos = TopologyFunctions.TranformPoint(tranformMatrixInv, getGameObjectPosition(go));
                     }
 
-                    SingleFEAData.currentPolygon.Add(new ElementGroupGameObject.PolygonElement()
+                    fea.currentPolygon.Add(new ElementGroupGameObject.PolygonElement()
                     {
                         instanceId = nodeId,
                         positionsInRootRS = pos,
@@ -273,24 +297,24 @@ public class MeshGenerator : MonoBehaviour
 
                 // reorganize polygon order
                 var currentPolygonDic = new Dictionary<int, ElementGroupGameObject.PolygonElement>();
-                SingleFEAData.currentPolygon.ForEach(n => currentPolygonDic[n.instanceId] = n);
-                SingleFEAData.currentPolygon = unifiedPolygon.polygon.Select(instanceId => currentPolygonDic[instanceId]).ToList();
+                fea.currentPolygon.ForEach(n => currentPolygonDic[n.instanceId] = n);
+                fea.currentPolygon = unifiedPolygon.polygon.Select(instanceId => currentPolygonDic[instanceId]).ToList();
 
                 // (2)
                 foreach (var p_t in innerMesh_add)
                 {
                     var position = TopologyFunctions.TranformPoint(tranformMatrix, p_t);
-                    SingleFEAData.innerMeshElements.Add(p_t, CreateInnerMesh(TopologyFunctions.TranformPoint(tranformMatrix, position), spawnee, spawneeRotation, feaContainer.transform));
+                    fea.innerMeshElements.Add(p_t, CreateInnerMesh(TopologyFunctions.TranformPoint(tranformMatrix, position), spawnee, spawneeRotation, feaContainer.transform));
                 }
-                //Debug.Log(SingleFEAData.innerMeshElements.Keys.Select(x => x).ToList());
+                //Debug.Log(fea.innerMeshElements.Keys.Select(x => x).ToList());
                 // (3)
                 foreach (var (p1, p2) in innerLinks_add)
                 {
                     //Debug.Log(p1 + " " + p2);
-                    var p1GO = SingleFEAData.innerMeshElements[p1];
-                    var p2GO = SingleFEAData.innerMeshElements[p2];
+                    var p1GO = fea.innerMeshElements[p1];
+                    var p2GO = fea.innerMeshElements[p2];
 
-                    SingleFEAData.innerLinks.Add(new ElementGroupGameObject.InnerSpringJoint()
+                    fea.innerLinks.Add(new ElementGroupGameObject.InnerSpringJoint()
                     {
                         fromPoint = p1,
                         toPoint = p2,
@@ -301,9 +325,9 @@ public class MeshGenerator : MonoBehaviour
                 // (4)
                 foreach (var (goId, meshElemPos) in outerLinks_add)
                 {
-                    var meshElemGO = SingleFEAData.innerMeshElements[meshElemPos];
+                    var meshElemGO = fea.innerMeshElements[meshElemPos];
                     var polyGO = gameObjectsMap[goId];
-                    SingleFEAData.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint
+                    fea.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint
                     {
                         fromObject = polyGO,
                         toPoint = meshElemPos,
@@ -313,91 +337,93 @@ public class MeshGenerator : MonoBehaviour
                 }
                 Debug.Log(string.Format("DONE {0},{1}", polygonNode_add.Count(), polygonNode_remove.Count()));
             }
-        }
-        else
+
+        });
+        foreach (var polygon in polygons)
         {
-            foreach (var polygon in polygons)
+            if (!changed && polygon.polygon.Count >= minStringSize)
             {
-                if (polygon.polygon.Count >= minStringSize)
-                {
-                    List<GameObject> polygonGameObjects = polygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
-                    List<Tuple<float, float>> polygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
+                // Create new FEA model
+                List<GameObject> polygonGameObjects = polygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
+                List<Tuple<float, float>> polygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
 
-                    var mesh = PolygonToMesh(polygonPositions, meshSize, bufferInside);
+                var mesh = PolygonToMesh(polygonPositions, meshSize, bufferInside);
 
-                    if (polygon.restElements.Count * 1.5 < polygon.polygon.Count)
-                        return;
-
-                    var polygonMeshLinks = TopologyFunctions.ConnectOuterPolygonToMesh(polygonPositions, mesh);
-
-                    SingleFEAData = new ElementGroupGameObject()
-                    {
-                        currentPolygon = polygon.polygon
-                            .Zip(polygonPositions, (instanceId, pos) => new ElementGroupGameObject.PolygonElement() { instanceId = instanceId, positionsInRootRS = pos })
-                            .ToList(),
-                    };
-
-
-                    foreach (var position in mesh.positions)
-                    {
-                        SingleFEAData.innerMeshElements.Add(position, CreateInnerMesh(position, spawnee, spawneeRotation, feaContainer.transform));
-                    }
-                    foreach (var connection in mesh.links)
-                    {
-                        var fromPoint = mesh.positions[connection.Item1];
-                        var toPoint = mesh.positions[connection.Item2];
-                        SingleFEAData.innerLinks.Add(new ElementGroupGameObject.InnerSpringJoint()
-                        {
-                            fromPoint = fromPoint,
-                            toPoint = toPoint,
-                            objs = (SingleFEAData.innerMeshElements[fromPoint], SingleFEAData.innerMeshElements[toPoint]),
-                        });
-                        this.connectionSpringDrawer.AddConnectionWithAnchor(
-                            SingleFEAData.innerMeshElements[fromPoint],
-                            SingleFEAData.innerMeshElements[toPoint],
-                            fromPoint,
-                            toPoint
-                            );
-                    }
-                    foreach (var (polygonConnectionIndex, meshConnectionIndex) in polygonMeshLinks)
-                    {
-                        var toPoint = mesh.positions[meshConnectionIndex];
-                        SingleFEAData.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint()
-                        {
-                            fromObject = polygonGameObjects[polygonConnectionIndex],
-                            toPoint = mesh.positions[meshConnectionIndex],
-                            objs = (polygonGameObjects[polygonConnectionIndex], SingleFEAData.innerMeshElements[toPoint]),
-                        });
-                        this.connectionSpringDrawer.AddConnection(
-                            polygonGameObjects[polygonConnectionIndex],
-                            SingleFEAData.innerMeshElements[toPoint]
-                            );
-                    }
-
-                    polygon.getNonPolygonElements()
-                        .ForEach(id =>
-                        {
-                            var go = gameObjectsMap[id];
-                            go.SetActive(false);
-                            SingleFEAData.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
-                            {
-                                gameObject = go,
-                                lastPosition = getGameObjectPosition(go),
-                            });
-                        });
-
-                    polygon.polygon
-                        .Select(x => gameObjectsMap[x])
-                        .ToList()
-                        .ForEach(node => node.tag = Tags.FEM_EDGE_PARTICLE);
-
+                if (polygon.restElements.Count * 1.5 < polygon.polygon.Count)
                     return;
+                if (TopologyFunctions.PolsbyPopper(polygonPositions) < PPTestMin)
+                    return;
+
+                var polygonMeshLinks = TopologyFunctions.ConnectOuterPolygonToMesh(polygonPositions, mesh);
+
+                var fea = new ElementGroupGameObject()
+                {
+                    currentPolygon = polygon.polygon
+                        .Zip(polygonPositions, (instanceId, pos) => new ElementGroupGameObject.PolygonElement() { instanceId = instanceId, positionsInRootRS = pos })
+                        .ToList(),
+                };
+
+
+                foreach (var position in mesh.positions)
+                {
+                    fea.innerMeshElements.Add(position, CreateInnerMesh(position, spawnee, spawneeRotation, feaContainer.transform));
                 }
+                foreach (var connection in mesh.links)
+                {
+                    var fromPoint = mesh.positions[connection.Item1];
+                    var toPoint = mesh.positions[connection.Item2];
+                    fea.innerLinks.Add(new ElementGroupGameObject.InnerSpringJoint()
+                    {
+                        fromPoint = fromPoint,
+                        toPoint = toPoint,
+                        objs = (fea.innerMeshElements[fromPoint], fea.innerMeshElements[toPoint]),
+                    });
+                    this.connectionSpringDrawer.AddConnectionWithAnchor(
+                        fea.innerMeshElements[fromPoint],
+                        fea.innerMeshElements[toPoint],
+                        fromPoint,
+                        toPoint
+                        );
+                }
+                foreach (var (polygonConnectionIndex, meshConnectionIndex) in polygonMeshLinks)
+                {
+                    var toPoint = mesh.positions[meshConnectionIndex];
+                    fea.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint()
+                    {
+                        fromObject = polygonGameObjects[polygonConnectionIndex],
+                        toPoint = mesh.positions[meshConnectionIndex],
+                        objs = (polygonGameObjects[polygonConnectionIndex], fea.innerMeshElements[toPoint]),
+                    });
+                    this.connectionSpringDrawer.AddConnection(
+                        polygonGameObjects[polygonConnectionIndex],
+                        fea.innerMeshElements[toPoint]
+                        );
+                }
+
+                polygon.getNonPolygonElements()
+                    .ForEach(id =>
+                    {
+                        var go = gameObjectsMap[id];
+                        go.SetActive(false);
+                        fea.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
+                        {
+                            gameObject = go,
+                            lastPosition = getGameObjectPosition(go),
+                        });
+                    });
+
+                polygon.polygon
+                    .Select(x => gameObjectsMap[x])
+                    .ToList()
+                    .ForEach(node => node.tag = Tags.FEM_EDGE_PARTICLE);
+
+                FEAs.Add(fea);
+
+                changed = true;
             }
         }
 
-        if(SingleFEAData != null)
-            SingleFEAData.LineDrawer.setPoints(SingleFEAData.currentPolygon.Select(x => gameObjectsMap[x.instanceId]));
+        FEAs.ForEach(fea => fea.lineDrawer.setPoints(fea.currentPolygon.Select(x => gameObjectsMap[x.instanceId])));
     }
 
     private static float GetForce(SpringJoint con_spring)
@@ -410,25 +436,26 @@ public class MeshGenerator : MonoBehaviour
         return (currentLength - anchorLength) * con_spring.spring;
     }
 
-    public (ElementGroupGameObject.InnerSpringJoint, float) MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
+    public IEnumerable<(ElementGroupGameObject.InnerSpringJoint, float)> MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
     {
-        var maxPull = float.MinValue;
-        ElementGroupGameObject.InnerSpringJoint innerJoint = null;
-        if (SingleFEAData != null)
+        return FEAs.Select(fea =>
         {
-            SingleFEAData.innerLinks.ForEach(ij =>
+            var maxPull = float.MinValue;
+            ElementGroupGameObject.InnerSpringJoint innerJoint = null;
+
+            fea.innerLinks.ForEach(ij =>
             {
                 var con_spring = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
                 var force = GetForce(con_spring);
                 var col = Color.green;
                 // push 
-                if(connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID())))
+                if (connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID())))
                 {
                     col = Color.yellow;
                 }
-                else if (force < 0) 
+                else if (force < 0)
                 {
-                    
+
                 }
                 // pull
                 else
@@ -446,60 +473,62 @@ public class MeshGenerator : MonoBehaviour
                 }
                 connectionSpringDrawer.SetColor(ij.objs.Item1, ij.objs.Item2, col);
             });
-        }
-        return (innerJoint, maxPull);
+
+            return (innerJoint, maxPull);
+        });
+
     }
 
-    public void StartCrackPropagation(ElementGroupGameObject.InnerSpringJoint ij)
-    {
-        if (SingleFEAData.status != ElementGroupGameObject.STATUS.CRACKING)
-        {
-            SingleFEAData.status = ElementGroupGameObject.STATUS.CRACKING;
+    // public void StartCrackPropagation(ElementGroupGameObject.InnerSpringJoint ij)
+    // {
+    //     if (SingleFEAData.status != ElementGroupGameObject.STATUS.CRACKING)
+    //     {
+    //         SingleFEAData.status = ElementGroupGameObject.STATUS.CRACKING;
 
-            Debug.Log("StartCrackPropagation");
+    //         Debug.Log("StartCrackPropagation");
 
-            connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
-            //SingleFEAData.innerLinks.Remove(ij);
-            //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
-        }
-    }
+    //         connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
+    //         //SingleFEAData.innerLinks.Remove(ij);
+    //         //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
+    //     }
+    // }
 
-   /* public void CalculateCrack((Tuple<float, float>, Tuple<float, float>) crackStart) // Dictionary<int, GameObject> gameObjectsMap
-    {
-        if (SingleFEAData != null)
-        {
-            var innerLinksDic = new Dictionary<(Tuple<float, float>, Tuple<float, float>), SpringJoint>();
-            SingleFEAData.innerLinks.ForEach(ij =>
-            {
-                var sj = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
-                innerLinksDic[(ij.fromPoint, ij.toPoint)] = sj;
-                innerLinksDic[(ij.toPoint, ij.fromPoint)] = sj;
-            });
+    /* public void CalculateCrack((Tuple<float, float>, Tuple<float, float>) crackStart) // Dictionary<int, GameObject> gameObjectsMap
+     {
+         if (SingleFEAData != null)
+         {
+             var innerLinksDic = new Dictionary<(Tuple<float, float>, Tuple<float, float>), SpringJoint>();
+             SingleFEAData.innerLinks.ForEach(ij =>
+             {
+                 var sj = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
+                 innerLinksDic[(ij.fromPoint, ij.toPoint)] = sj;
+                 innerLinksDic[(ij.toPoint, ij.fromPoint)] = sj;
+             });
 
-            var done = false;
-            var (p1, p2) = crackStart;
-            while (!done) 
-            {
-                var p3 = Tuple.Create((float)((p1.Item1 + p2.Item1) / 2 - (p2.Item2 - p1.Item2) * Math.Sqrt(3) / 2), (float)((p1.Item2 + p2.Item2) / 2 + (p2.Item1 - p1.Item1) * Math.Sqrt(3) / 2));
+             var done = false;
+             var (p1, p2) = crackStart;
+             while (!done) 
+             {
+                 var p3 = Tuple.Create((float)((p1.Item1 + p2.Item1) / 2 - (p2.Item2 - p1.Item2) * Math.Sqrt(3) / 2), (float)((p1.Item2 + p2.Item2) / 2 + (p2.Item1 - p1.Item1) * Math.Sqrt(3) / 2));
 
-                if (!SingleFEAData.innerMeshElements.ContainsKey(p3))
-                {
-                    done = true;
-                }
-                else
-                {
-                    // var elem3 = SingleFEAData.innerMeshElements[p3];
-                    var force13 = GetForce(innerLinksDic[(p1, p3)]);
-                    var force12 = GetForce(innerLinksDic[(p1, p2)]);
-                    if(force12 > force13)
-                    {
+                 if (!SingleFEAData.innerMeshElements.ContainsKey(p3))
+                 {
+                     done = true;
+                 }
+                 else
+                 {
+                     // var elem3 = SingleFEAData.innerMeshElements[p3];
+                     var force13 = GetForce(innerLinksDic[(p1, p3)]);
+                     var force12 = GetForce(innerLinksDic[(p1, p2)]);
+                     if(force12 > force13)
+                     {
 
-                    }
-                }
+                     }
+                 }
 
-            }
-        }
-    }*/
+             }
+         }
+     }*/
 
 
     private GameObject CreateInnerMesh(Tuple<float, float> position, GameObject spawnee, Quaternion spawneeRotation, Transform transform)
@@ -521,7 +550,6 @@ public class MeshGenerator : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if(SingleFEAData != null)
-        SingleFEAData.LineDrawer.updatePositions();   
+        FEAs.ForEach(fea => fea.lineDrawer.updatePositions());
     }
 };

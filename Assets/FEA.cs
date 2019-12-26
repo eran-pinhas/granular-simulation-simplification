@@ -27,12 +27,12 @@ public class FEA : MonoBehaviour, ICollisionListener
 
     void Update()
     {
-        var (maxPullJoint, maxPull) = meshGenerator.MonitorMesh(childrenDict);
-        reporter.reportNew(maxPull > float.MinValue ? maxPull : -1, Time.time);
-
-        if (maxPull > MaxForce)
+        var maxs = meshGenerator.MonitorMesh(childrenDict);
+        var maxMaxPull = maxs.Select(m => m.Item2).DefaultIfEmpty(-1).Max();
+        reporter.reportNew(maxMaxPull > float.MinValue ? maxMaxPull : -1, Time.time);
+        if (maxMaxPull > MaxForce)
         {
-            meshGenerator.StartCrackPropagation(maxPullJoint);
+            // meshGenerator.StartCrackPropagation(maxPullJoint);
         }
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);

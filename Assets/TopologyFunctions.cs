@@ -200,20 +200,17 @@ public class TopologyFunctions
         return false; // Doesn't fall in any of the above cases 
     }
 
-    public static bool IsRounded(List<Tuple<float,float>> poly, float particleSize, float minRatio = 0.2f)
+    public static double PolsbyPopper(List<Tuple<float,float>> poly)
     {
-        var l = poly.Count;
-        if (poly.Last().Equals(poly.First())) l--;
-        for (var i = 0; i < l; i++)
-        {
-            for (var j = i + 1; j < l; j++) 
-            {
-                double perfectRoundDistance = (l * particleSize / Math.PI) * Math.Sin((j - i) * Math.PI / l);
-                if (Distance(poly[i], poly[j]) < minRatio * perfectRoundDistance)
-                    return false;
-            }
-        }
-        return true;
+        var points = new List<Tuple<float,float>>(poly);
+        points.Add(points[0]);
+        var area = Math.Abs(points.Take(points.Count - 1)
+        .Select((p, i) => (points[i + 1].Item1 - p.Item1) * (points[i + 1].Item2 + p.Item2))
+        .Sum() / 2);
+
+        var perimiter = poly.Select((p,i)=> Distance( points[i + 1], p)).Sum();
+
+        return Math.PI*4 *area/(perimiter*perimiter);
     }
 
     // Returns true if the point p lies inside the polygon[] with n vertices 
