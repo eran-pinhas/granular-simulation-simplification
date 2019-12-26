@@ -17,7 +17,7 @@ public class Reporter : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        
+
     }
 
     public void reportNew(float data, float t)

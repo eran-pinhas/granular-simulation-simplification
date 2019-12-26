@@ -74,23 +74,24 @@ public class ConnectionSpringDrawer : ConnectionDrawer
         }
     }
 
-    public List<(int,int)> getEliminated()
+    public List<(int, int)> getEliminated()
     {
         return eliminated;
     }
+
     public void eliminateSpringJoint(GameObject a, GameObject b)
-        {
-            var sj = getSpringJoint(a,b);
+    {
+        var sj = getSpringJoint(a, b);
         sj.damper = 0;
         sj.spring = 0;
 
         var t = (a.GetInstanceID(), b.GetInstanceID());
-        if (!springs.ContainsKey(t)) 
+        if (!springs.ContainsKey(t))
         {
             t = (b.GetInstanceID(), a.GetInstanceID());
         }
         eliminated.Add(t);
-        
+
     }
 
     public override bool RemoveConnection(GameObject a, GameObject b)

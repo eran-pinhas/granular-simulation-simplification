@@ -16,10 +16,10 @@ public class FEA : MonoBehaviour, ICollisionListener
     public MeshGenerator meshGenerator;
     public ConnectionDrawer connectionDrawer;
     public float MaxForce;
-    
+
     private List<GameObject> children = new List<GameObject>();
     private Dictionary<int, GameObject> childrenDict = new Dictionary<int, GameObject>();
-    
+
     void Start()
     {
         new GameObject("FEA_data");

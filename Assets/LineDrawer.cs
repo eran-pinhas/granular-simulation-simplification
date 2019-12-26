@@ -4,7 +4,7 @@ using System.Linq;
 using System.Collections.Generic;
 using System;
 
-public class LineDrawer//  : MonoBehaviour
+public class LineDrawer
 {
 
     public static Vector3 getGameObjectPosition(GameObject go)
@@ -13,17 +13,6 @@ public class LineDrawer//  : MonoBehaviour
         return vec3; // Tuple.Create(vec3.x, vec3.y);
     }
 
-    //// Use this for initialization
-    //void Start()
-    //{
-
-    //}
-
-    //// Update is called once per frame
-    //void Update()
-    //{
-
-    //}
     LineRenderer lr;
     Vector3 shift;
     public LineDrawer(Vector3 shift)

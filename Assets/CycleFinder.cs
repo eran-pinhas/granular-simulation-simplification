@@ -344,66 +344,6 @@ public class CycleFinder
                 isTouchingExistingFEM = requiredEdgeType == EDGE_EGDE,
                 sourceCycles = sourceCycles,
             });
-
-            //var strings = new List<List<int>>();
-            //var endEgdesFlags = endEgdes.ToDictionary(t => t, t => false);
-
-            //bool selfTouchingPolygon = false;
-            //while (!selfTouchingPolygon)
-            //{
-            //    KeyValuePair<(int, int), bool> startEgde;
-            //    try
-            //    {
-            //        startEgde = endEgdesFlags.First(t => !t.Value);
-            //    }
-            //    catch (InvalidOperationException)
-            //    {
-            //        break;
-            //    }
-
-            //    var startEgdeKey = startEgde.Key;
-            //    endEgdesFlags[startEgde.Key] = true;
-            //    var initNode = startEgdeKey.Item1;
-            //    var lastNode = startEgdeKey.Item1;
-            //    var currentNode = startEgdeKey.Item2;
-
-            //    var currentNodeString = new List<int>() { startEgdeKey.Item1, startEgdeKey.Item2 };
-
-            //    while (currentNode != initNode && !selfTouchingPolygon)
-            //    {
-            //        var nextEgdes = nodeEdgeMap[currentNode].Select(i => endEgdes[i]).Where(s => s != formatNodesId(lastNode, currentNode));
-            //        if (nextEgdes.Count() != 1)
-            //        {
-            //            // is not usable polygon, we'll need to wait
-            //            if (endEgdes.Count > 70) UnityEngine.Debug.Log("endEgdes.Count > 70");
-            //            selfTouchingPolygon = true;
-            //        }
-            //        endEgdesFlags[nextEgdes.First()] = true;
-            //        var optionalNextNode = nextEgdes.First();
-            //        var nextNode = optionalNextNode.Item1 == currentNode ? optionalNextNode.Item2 : optionalNextNode.Item1; // .First(x => x != currentNode)
-
-            //        lastNode = currentNode;
-            //        currentNode = nextNode;
-            //        currentNodeString.Add(currentNode);
-            //    }
-
-            //    strings.Add(currentNodeString);
-            //}
-
-            //if (!selfTouchingPolygon)
-            //{
-            //    var outRing = TopologyFunctions.LongestString(strings);
-            //    if (outRing.Count != pol.Count)
-            //        UnityEngine.Debug.LogAssertion("outRing.Count == pol.Count");
-            //    polygons.Add(new ElementGroupPolygon()
-            //    {
-            //        polygon = outRing,
-            //        holes = strings.Where(p => p != outRing).ToList(),
-            //        restElements = allNodes.Where(nodeT => !nodeEdgeMap.ContainsKey(nodeT.Key)).Select(x => x.Key).ToList(),
-            //        isTouchingExistingFEM = requiredEdgeType == EDGE_EGDE,
-            //        sourceCycles = sourceCycles,
-            //    });
-            //}
         }
 
 
