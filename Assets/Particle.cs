@@ -28,22 +28,32 @@ public class Particle : MonoBehaviour
     {
         PARTICLE,
         FEM_EDGE_PARTICLE,
-        FEM_CENTER_PARTICLE,
+        FEM_HIDDEN_PARTICLE,
     }
     private PARTICLE_TYPE _type = PARTICLE_TYPE.PARTICLE;
     private int _id;
-    // Start is called before the first frame update
-
     public PARTICLE_TYPE Type
     {
         get { return _type; }
-        set { _type = value; }
     }
 
-    // public Particle(){
-    //     _id  = (int) (1000000 * UnityEngine.Random.value);
-    //     UnityEngine.Debug.Log(_id);
-    // }
+    public void setSetAsEdge(int groupId){
+        this._type = PARTICLE_TYPE.FEM_EDGE_PARTICLE;
+        this.particleGroupId = groupId;
+        this.gameObject.SetActive(true);
+    }
+    public void setAsFree(){
+        this._type = PARTICLE_TYPE.PARTICLE;
+        this.particleGroupId = -1;
+        this.gameObject.SetActive(true);
+    }
+    public void setAsHidden(int groupId){
+        this._type = PARTICLE_TYPE.FEM_HIDDEN_PARTICLE;
+        this.particleGroupId = groupId;
+        this.gameObject.SetActive(false);
+    }
+
+    public int particleGroupId;
 
     public Tuple<float, float> Position
     {

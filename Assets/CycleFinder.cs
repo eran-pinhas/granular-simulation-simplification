@@ -34,26 +34,26 @@ public class CycleFinder
     const int VISITED = 1;
     const int DONE = 2;
 
-    static int mod(int x, int m)
+    private static int mod(int x, int m)
     {
         int r = x % m;
         return r < 0 ? r + m : r;
     }
-    static double mod(double x, double m)
+    private static double mod(double x, double m)
     {
         double r = x % m;
         return r < 0 ? r + m : r;
     }
 
-    public static Stopwatch stopWatch = new Stopwatch();
+    private static Stopwatch stopWatch = new Stopwatch();
 
-    static bool singularConstraint(int a, int b, int c)
+    private static bool singularConstraint(int a, int b, int c)
     {
         // in 3 cycle - ordered a<b<c
         return a < b && b < c;
     }
 
-    static bool singularConstraint(int a, int b, int c, int d)
+    private static bool singularConstraint(int a, int b, int c, int d)
     {
         // in 4 cycle - a is smallest and the 4th is larger then the second (the two around the first - for singularity)
         // generally - this is the constraint in 3 cycle too
@@ -100,16 +100,16 @@ public class CycleFinder
         return res;
     }
 
-    static T iCycle<T>(List<T> cycle, int i)
+    private static T iCycle<T>(List<T> cycle, int i)
     {
         return cycle[mod(i, cycle.Count)];
     }
-    static (int, int) formatNodesId(int id1, int id2)
+    private static (int, int) formatNodesId(int id1, int id2)
     {
         return (id1 < id2) ? (id1, id2) : (id2, id1);
     }
 
-    static int getOtherNode(ValueTuple<int, int> edge, int curr)
+    private static int getOtherNode(ValueTuple<int, int> edge, int curr)
     {
         if (edge.Item1 == curr) return edge.Item2;
         else if (edge.Item2 == curr) return edge.Item1;
@@ -121,15 +121,16 @@ public class CycleFinder
         return Math.Atan2(p2.Item2 - p1.Item2, p2.Item1 - p1.Item1);
     }
 
-    public enum EDGE_TYPE
+    private enum EDGE_TYPE
     {
         EDGE_EGDE = 0,
         SINGLE_NODE_CONNECTED_EGDE = 1,
         DITACHED_EGDE = 2,
+        // one of the edges is already in group
         MARKED_AS_USED = 3,
     }
 
-    public static EDGE_TYPE MinEdgeType(EDGE_TYPE a, EDGE_TYPE b)
+    private static EDGE_TYPE MinEdgeType(EDGE_TYPE a, EDGE_TYPE b)
     {
         return (int)a > (int)b ? b : a;
     }
@@ -154,7 +155,7 @@ public class CycleFinder
 
                     if (secontNode != -1)
                     {
-                        UnityEngine.Debug.LogAssertion(String.Format("prev c != -1 - {0} {1} {2}", cycle.Count, cycles[firstNode].Count, cycles[secontNode].Count));
+                        UnityEngine.Debug.LogAssertion(String.Format("More that 2 cycles for 1 edge - prev c != -1 - {0} {1} {2}", cycle.Count, cycles[firstNode].Count, cycles[secontNode].Count));
                         throw new UnityEngine.UnityException();
                     }
                     edgesMap[edgeName] = (firstNode, c, edgeType);
@@ -169,6 +170,7 @@ public class CycleFinder
                 }
                 minEdgeType = MinEdgeType(minEdgeType, edgeType);
             }
+            // cycles type
             cycleFlagMap[c] = minEdgeType;
         }
         return (edgesMap, cycleFlagMap);

@@ -75,13 +75,6 @@ public class TopologyFunctions
 
     }
 
-
-    static int mod(int x, int m)
-    {
-        int r = x % m;
-        return r < 0 ? r + m : r;
-    }
-
     public static (Mesh, (float, float)) SimpleTriangleMesh(Tuple<Tuple<float, float>, Tuple<float, float>> extent, float meshSize, ValueTuple<float, float>? forceBLCorner = null)
     {
         var xStep = meshSize;

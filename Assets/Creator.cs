@@ -41,7 +41,7 @@ public class Creator : MonoBehaviour
 
             var go = particle.gameObject;
 
-            particle.Type = Particle.PARTICLE_TYPE.PARTICLE;
+            particle.setAsFree();
 
             go.transform.localScale += scaleRandomPart * (float)rand.NextDouble();
 
