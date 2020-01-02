@@ -1,9 +1,6 @@
-﻿using UnityEngine;
-using System.Collections;
-
-public interface ICollisionListener
+﻿public interface ICollisionListener
 {
-    void informCollision(GameObject a, GameObject b);
+    void informCollision(Particle a, Particle b);
 
-    void informCollisionRemoved(GameObject a, GameObject b);
+    void informCollisionRemoved(Particle a, Particle b);
 }

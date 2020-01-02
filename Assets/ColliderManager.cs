@@ -6,19 +6,16 @@ public class ColliderManager : MonoBehaviour
 {
     public ICollisionListener collisionListener;
 
-    private List<GameObject> colliding = new List<GameObject>();
-
-    private static bool IsCollide(GameObject go)
-    {
-        return (go.GetComponent<ColliderManager>() != null);
-    }
+    private List<Particle> colliding = new List<Particle>();
 
     void OnCollisionEnter(Collision collision)
     {
-        if (IsCollide(collision.gameObject))
+        var p1 = this.GetComponent<Particle>();
+        var p2 = collision.gameObject.GetComponent<Particle>();
+        if (p1 != null && p2 != null)
         {
-            colliding.Add(collision.gameObject);
-            collisionListener.informCollision(this.gameObject, collision.gameObject);
+            colliding.Add(p2);
+            collisionListener.informCollision(p1, p2);
         }
     }
 
@@ -29,24 +26,23 @@ public class ColliderManager : MonoBehaviour
 
     void RemoveCollision(GameObject go)
     {
-        if (IsCollide(gameObject))
+
+        var p1 = this.GetComponent<Particle>();
+        var p2 = go.GetComponent<Particle>();
+        if (p1 != null && p2 != null)
         {
-            colliding.Remove(gameObject);
+            colliding.Remove(p2);
             if (collisionListener != null)
             {
-                collisionListener.informCollisionRemoved(this.gameObject, go);
+                collisionListener.informCollisionRemoved(p1, p2);
             }
         }
     }
 
-    public List<GameObject> getColliding()
-    {
-        return colliding;
-    }
-
     void OnDisable()
     {
-        colliding.ForEach(x => collisionListener.informCollisionRemoved(gameObject, x));
+        var p = this.GetComponent<Particle>();
+        colliding.ForEach(x => collisionListener.informCollisionRemoved(p, x));
         colliding.ForEach(x =>
         {
             var cm = x.GetComponent<ColliderManager>();

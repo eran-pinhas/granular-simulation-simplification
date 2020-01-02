@@ -121,31 +121,31 @@ public class CycleFinder
         return Math.Atan2(p2.Item2 - p1.Item2, p2.Item1 - p1.Item1);
     }
 
-    public static List<ElementGroupPolygon> FindAdjacantCicles(List<List<int>> cycles, Func<int, bool> isEdgeParticlePredicate, Func<int, Tuple<float, float>> getItemPos)
+    public enum EDGE_TYPE
     {
-        const int EDGE_EGDE = 0;
-        const int SINGLE_NODE_CONNECTED_EGDE = 1;
-        const int DITACHED_EGDE = 2;
-        const int MARKED_AS_USED = 3;
+        EDGE_EGDE = 0,
+        SINGLE_NODE_CONNECTED_EGDE = 1,
+        DITACHED_EGDE = 2,
+        MARKED_AS_USED = 3,
+    }
 
-        var polygons = new List<ElementGroupPolygon>();
-        var edgesMap = new Dictionary<ValueTuple<int, int>, ValueTuple<int, int, int>>();
+    public static EDGE_TYPE MinEdgeType(EDGE_TYPE a, EDGE_TYPE b)
+    {
+        return (int)a > (int)b ? b : a;
+    }
 
-
-        var isEdgeParticleDictionaty = cycles.SelectMany(x => x).Distinct().ToDictionary(x => x, x => isEdgeParticlePredicate(x));
-
-        // Removing cycles that are all in egde particles
-        cycles = cycles.Where(nodes => nodes.Any(nodeId => !isEdgeParticleDictionaty[nodeId])).ToList();
-
-        Dictionary<int, int> cycleFlagMap = new Dictionary<int, int>();
+    private static (Dictionary<(int, int), (int, int, EDGE_TYPE)>, Dictionary<int, EDGE_TYPE>) AnalyzeCEdges(List<List<int>> cycles, Dictionary<int, bool> isEdgeParticleDictionaty)
+    {
+        var edgesMap = new Dictionary<(int, int), (int, int, EDGE_TYPE)>();
+        var cycleFlagMap = new Dictionary<int, EDGE_TYPE>();
         for (var c = 0; c < cycles.Count; c++)
         {
             //bool isAllParticlesEdgesParticles = true;
             var cycle = cycles[c];
-            var minEdgeType = int.MaxValue;
+            var minEdgeType = EDGE_TYPE.MARKED_AS_USED;
             for (var i = 0; i < cycle.Count; i++)
             {
-                int edgeType;
+                EDGE_TYPE edgeType;
                 var edgeName = formatNodesId(iCycle(cycle, i), iCycle(cycle, i + 1));
                 if (edgesMap.ContainsKey(edgeName))
                 {
@@ -155,59 +155,73 @@ public class CycleFinder
                     if (secontNode != -1)
                     {
                         UnityEngine.Debug.LogAssertion(String.Format("prev c != -1 - {0} {1} {2}", cycle.Count, cycles[firstNode].Count, cycles[secontNode].Count));
-                        return new List<ElementGroupPolygon>();
+                        throw new UnityEngine.UnityException();
                     }
                     edgesMap[edgeName] = (firstNode, c, edgeType);
                 }
                 else
                 {
                     var edgeParticleCount = 0;
-                    edgeParticleCount += isEdgeParticlePredicate(iCycle(cycle, i)) ? 1 : 0;
-                    edgeParticleCount += isEdgeParticlePredicate(iCycle(cycle, i + 1)) ? 1 : 0;
-                    edgeType = edgeParticleCount == 2 ? EDGE_EGDE : (edgeParticleCount == 1 ? SINGLE_NODE_CONNECTED_EGDE : DITACHED_EGDE);
+                    edgeParticleCount += isEdgeParticleDictionaty[iCycle(cycle, i)] ? 1 : 0;
+                    edgeParticleCount += isEdgeParticleDictionaty[iCycle(cycle, i + 1)] ? 1 : 0;
+                    edgeType = edgeParticleCount == 2 ? EDGE_TYPE.EDGE_EGDE : (edgeParticleCount == 1 ? EDGE_TYPE.SINGLE_NODE_CONNECTED_EGDE : EDGE_TYPE.DITACHED_EGDE);
                     edgesMap[edgeName] = (c, -1, edgeType);
                 }
-
-                //isAllParticlesEdgesParticles = isAllParticlesEdgesParticles && (edgeType == EDGE_EGDE);
-
-                minEdgeType = Math.Min(minEdgeType, edgeType);
+                minEdgeType = MinEdgeType(minEdgeType, edgeType);
             }
-
-            //if (!isAllParticlesEdgesParticles)
             cycleFlagMap[c] = minEdgeType;
         }
+        return (edgesMap, cycleFlagMap);
+    }
 
+    public static List<ElementGroupPolygon> FindAdjacantCicles(List<List<int>> cycles, Func<int, bool> isEdgeParticlePredicate, Func<int, Tuple<float, float>> getItemPos)
+    {
+
+        var polygons = new List<ElementGroupPolygon>();
+
+        var isEdgeParticleDictionaty = cycles.SelectMany(x => x).Distinct().ToDictionary(x => x, x => isEdgeParticlePredicate(x));
+
+        // Removing cycles that are all in egde particles
+        cycles = cycles.Where(nodes => nodes.Any(nodeId => !isEdgeParticleDictionaty[nodeId])).ToList();
+
+        Dictionary<(int, int), (int, int, EDGE_TYPE)> edgesMap;
+        Dictionary<int, EDGE_TYPE> cycleFlagMap;
+        try
+        {
+            (edgesMap, cycleFlagMap) = AnalyzeCEdges(cycles, isEdgeParticleDictionaty);
+        }
+        catch (UnityEngine.UnityException)
+        {
+            return new List<ElementGroupPolygon>();
+        }
 
         // Looping threw all the cycles found threw neighbors. marking each one already looped in map - `cycleFlagMap`
         // each while loop represent continuous cycles streak
+        // First looking for EDGE_EGDE (touching existing cycle)
         var cyclesLeft = true;
-        var requiredEdgeType = EDGE_EGDE;
+        var requiredEdgeType = EDGE_TYPE.EDGE_EGDE;
         while (cyclesLeft)
         {
-            KeyValuePair<int, int> unflagedCycle;
+            KeyValuePair<int, EDGE_TYPE> unflagedCycle;
             try { unflagedCycle = cycleFlagMap.First(t => t.Value == requiredEdgeType); }
             catch (InvalidOperationException)
             {
-                if (requiredEdgeType == EDGE_EGDE)
-                {
-                    requiredEdgeType = DITACHED_EGDE;
-                    //    cycleFlagMap.Where(t => t.Key == SINGLE_NODE_CONNECTED_EGDE).ToList().ForEach(t => cycleFlagMap[t.Key] = MARKED_AS_USED);
-                }
+                if (requiredEdgeType == EDGE_TYPE.EDGE_EGDE)
+                    requiredEdgeType = EDGE_TYPE.DITACHED_EGDE;
                 else
-                {
                     cyclesLeft = false;
-                }
+
                 continue;
             }
 
-            var allNodes = new Dictionary<int, bool>();
+            var groupNodes = new Dictionary<int, bool>();
 
             var endEgdes = new List<(int, int)>();
 
             Stack<int> cycleStack = new Stack<int>();
             List<List<int>> sourceCycles = new List<List<int>>();
             cycleStack.Push(unflagedCycle.Key);
-            cycleFlagMap[unflagedCycle.Key] = MARKED_AS_USED;
+            cycleFlagMap[unflagedCycle.Key] = EDGE_TYPE.MARKED_AS_USED;
 
             // At every loop - taking cycle from the stack and adding its neighbors to the stack
             while (cycleStack.Count > 0)
@@ -218,7 +232,7 @@ public class CycleFinder
                 for (int e = 0; e < cycle.Count; e++)
                 {
                     // For enlisting all nodes in list
-                    allNodes[iCycle(cycle, e)] = true;
+                    groupNodes[iCycle(cycle, e)] = true;
 
                     var edgeName = formatNodesId(iCycle(cycle, e), iCycle(cycle, e + 1));
                     if (edgesMap[edgeName].Item2 == -1)
@@ -237,17 +251,17 @@ public class CycleFinder
                         else
                             UnityEngine.Debug.LogAssertion("cycle not found :(");
 
-                        // In case we done going threw the "touching the existing FEM" edges, we wouldn't like to capture them as possible
+                        // In case we done going threw the "touching the existing FEMs" edges, we wouldn't like to capture them as possible
                         // (Not sure if this condition will ever meet. just to be sure)
-                        if (requiredEdgeType == DITACHED_EGDE && cycleFlagMap[theOtherCycle] == EDGE_EGDE || cycleFlagMap[theOtherCycle] == SINGLE_NODE_CONNECTED_EGDE)
+                        if (requiredEdgeType == EDGE_TYPE.DITACHED_EGDE && cycleFlagMap[theOtherCycle] == EDGE_TYPE.EDGE_EGDE || cycleFlagMap[theOtherCycle] == EDGE_TYPE.SINGLE_NODE_CONNECTED_EGDE)
                         {
                             // end edge
                             endEgdes.Add(edgeName);
                         }
-                        else if (theOtherCycle >= 0 && cycleFlagMap[theOtherCycle] != MARKED_AS_USED)
+                        else if (theOtherCycle >= 0 && cycleFlagMap[theOtherCycle] != EDGE_TYPE.MARKED_AS_USED)
                         {
                             cycleStack.Push(theOtherCycle);
-                            cycleFlagMap[theOtherCycle] = MARKED_AS_USED;
+                            cycleFlagMap[theOtherCycle] = EDGE_TYPE.MARKED_AS_USED;
                         }
                     }
                 }
@@ -340,8 +354,8 @@ public class CycleFinder
             {
                 polygon = pol,
                 holes = new List<List<int>>(),
-                restElements = allNodes.Where(nodeT => !test_polSet.Contains(nodeT.Key)).Select(x => x.Key).ToList(),
-                isTouchingExistingFEM = requiredEdgeType == EDGE_EGDE,
+                restElements = groupNodes.Where(nodeT => !test_polSet.Contains(nodeT.Key)).Select(x => x.Key).ToList(),
+                isTouchingExistingFEM = requiredEdgeType == EDGE_TYPE.EDGE_EGDE,
                 sourceCycles = sourceCycles,
             });
         }

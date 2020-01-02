@@ -12,9 +12,6 @@ public class Creator : MonoBehaviour
 
     public Vector3 scaleRandomPart;
 
-    private GameObject particlesContainer;
-
-
     System.Random rand = new System.Random();
 
     DateTime lastTimeCreated;
@@ -23,8 +20,7 @@ public class Creator : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        particlesContainer = new GameObject("Particles");
-        particlesContainer.transform.parent = this.gameObject.transform;
+
     }
 
     // Update is called once per frame
@@ -34,16 +30,22 @@ public class Creator : MonoBehaviour
         {
             lastTimeCreated = DateTime.Now;
             createdCount++;
-            var obj = Instantiate(spanee, pos.position + new Vector3((float)(RandPart.x * rand.NextDouble()), (float)(RandPart.y * rand.NextDouble()), (float)(RandPart.z * rand.NextDouble())), pos.rotation);
-            obj.name = String.Format("{0} {1}", obj.name, createdCount);
-            obj.tag = Tags.PARTICLE;
-            var cl = obj.AddComponent<ColliderManager>();
-            cl.collisionListener = this.fea;
+            var name = String.Format("Particle {0}", createdCount);
 
-            obj.transform.localScale += scaleRandomPart * (float)rand.NextDouble();
+            var particle = Particle.Generate(
+                spanee,
+                pos.position + new Vector3((float)(RandPart.x * rand.NextDouble()), (float)(RandPart.y * rand.NextDouble()), (float)(RandPart.z * rand.NextDouble())),
+                pos.rotation,
+                name,
+                this.fea);
 
-            obj.transform.parent = particlesContainer.transform;
-            fea.informNewChild(obj);
+            var go = particle.gameObject;
+
+            particle.Type = Particle.PARTICLE_TYPE.PARTICLE;
+
+            go.transform.localScale += scaleRandomPart * (float)rand.NextDouble();
+
+            fea.informNewChild(particle);
         }
 
 

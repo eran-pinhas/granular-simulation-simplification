@@ -1,7 +1,4 @@
-﻿// #define CollisionType GameObject
-
-
-using System;
+﻿using System;
 using System.Collections;
 using System.Linq;
 using System.Collections.Generic;
@@ -17,8 +14,8 @@ public class FEA : MonoBehaviour, ICollisionListener
     public ConnectionDrawer connectionDrawer;
     public float MaxForce;
 
-    private List<GameObject> children = new List<GameObject>();
-    private Dictionary<int, GameObject> childrenDict = new Dictionary<int, GameObject>();
+    private List<Particle> children = new List<Particle>();
+    private Dictionary<int, Particle> childrenDict = new Dictionary<int, Particle>();
 
     void Start()
     {
@@ -27,7 +24,7 @@ public class FEA : MonoBehaviour, ICollisionListener
 
     void Update()
     {
-        var maxs = meshGenerator.MonitorMesh(childrenDict);
+        var maxs = meshGenerator.MonitorMesh();
         var maxMaxPull = maxs.Select(m => m.Item2).DefaultIfEmpty(-1).Max();
         reporter.reportNew(maxMaxPull > float.MinValue ? maxMaxPull : -1, Time.time);
         if (maxMaxPull > MaxForce)
@@ -38,7 +35,7 @@ public class FEA : MonoBehaviour, ICollisionListener
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
         try
         {
-            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].tag == Tags.FEM_EDGE_PARTICLE, instanceId => MeshGenerator.getGameObjectPosition(childrenDict[instanceId]));
+            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE, instanceId => childrenDict[instanceId].Position);
             this.meshGenerator.CreateFea(adj, childrenDict, spawnee, pos.rotation);
         }
         catch (Exception e)
@@ -48,23 +45,23 @@ public class FEA : MonoBehaviour, ICollisionListener
 
     }
 
-    public void informNewChild(GameObject obj)
+    public void informNewChild(Particle obj)
     {
         children.Add(obj);
-        childrenDict.Add(obj.GetInstanceID(), obj);
-        collisions.Add(obj.GetInstanceID(), new Dictionary<int, bool>());
+        childrenDict.Add(obj.Id, obj);
+        collisions.Add(obj.Id, new Dictionary<int, bool>());
     }
 
     public Dictionary<int, Dictionary<int, bool>> collisions = new Dictionary<int, Dictionary<int, bool>>();
-    public void informCollision(GameObject a, GameObject b)
+    public void informCollision(Particle a, Particle b)
     {
-        collisions[a.GetInstanceID()].Add(b.GetInstanceID(), true); // , line
-        this.connectionDrawer.AddConnection(a, b);
+        collisions[a.Id].Add(b.Id, true); // , line
+        this.connectionDrawer.AddConnection(a.gameObject, b.gameObject);
     }
 
-    public void informCollisionRemoved(GameObject a, GameObject b)
+    public void informCollisionRemoved(Particle a, Particle b)
     {
-        this.connectionDrawer.RemoveConnection(a, b);
-        collisions[a.GetInstanceID()].Remove(b.GetInstanceID());
+        this.connectionDrawer.RemoveConnection(a.gameObject, b.gameObject);
+        collisions[a.Id].Remove(b.Id);
     }
 }

@@ -1353,7 +1353,7 @@ MonoBehaviour:
   meshSize: 3.5
   bufferInside: 0.5
   minStringSize: 70
-  PPTestMin: 1
+  PPTestMin: 0.3
 --- !u!114 &2097349682
 MonoBehaviour:
   m_ObjectHideFlags: 0

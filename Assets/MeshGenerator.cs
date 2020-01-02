@@ -7,23 +7,11 @@ using System;
 
 public class MeshGenerator : MonoBehaviour
 {
-    public static Tuple<float, float> getGameObjectPosition(GameObject go)
-    {
-        var vec3 = go.transform.position;
-        return Tuple.Create(vec3.x, vec3.y);
-    }
-
-    private static void setGameObjectPosition(GameObject go, Tuple<float, float> pos)
-    {
-        Vector3 vec3 = new Vector3(pos.Item1, pos.Item2, go.transform.position.z);
-        go.transform.position = vec3;
-    }
-
     public class ElementGroupGameObject
     {
         public class HiddenNodes
         {
-            public GameObject gameObject;
+            public Particle particle;
             public Tuple<float, float> lastPosition;
         }
 
@@ -36,7 +24,7 @@ public class MeshGenerator : MonoBehaviour
         public class OuterSpringJoint
         {
             public ValueTuple<GameObject, GameObject> objs;
-            public GameObject fromObject;
+            public Particle particle;
             public Tuple<float, float> toPoint;
         }
         public class PolygonElement
@@ -117,7 +105,7 @@ public class MeshGenerator : MonoBehaviour
 
     int tries = 0;
     public void CreateFea(List<CycleFinder.ElementGroupPolygon> polygons,
-        Dictionary<int, GameObject> gameObjectsMap,
+        Dictionary<int, Particle> gameObjectsMap,
         GameObject spawnee,
         Quaternion spawneeRotation
         )
@@ -144,7 +132,7 @@ public class MeshGenerator : MonoBehaviour
                     .Concat(new List<List<int>>() {
                         fea.currentPolygon.GetRange(0, fea.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
                     }).ToList();
-                var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false, instanceId => getGameObjectPosition(gameObjectsMap[instanceId]));
+                var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false, instanceId => gameObjectsMap[instanceId].Position);
 
 
 
@@ -157,14 +145,14 @@ public class MeshGenerator : MonoBehaviour
 
                 var unifiedPolygon = unifiedPolygons[0];
 
-                List<GameObject> polygonGameObjects = unifiedPolygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
-                List<Tuple<float, float>> newPolygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
+                var polygonGameObjects = unifiedPolygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
+                var newPolygonPositions = polygonGameObjects.Select(p => p.Position).ToList();
 
                 if (TopologyFunctions.PolsbyPopper(newPolygonPositions) < PPTestMin)
                     continue;
 
                 var polygonLastPositions = fea.currentPolygon.Select(x => x.positionsInRootRS);
-                var polygonCurrentPositions = fea.currentPolygon.Select(node => getGameObjectPosition(gameObjectsMap[node.instanceId]));
+                var polygonCurrentPositions = fea.currentPolygon.Select(node => gameObjectsMap[node.instanceId].Position);
 
                 var tranformMatrix = TopologyFunctions.LinearRegression2d(polygonLastPositions, polygonCurrentPositions);
                 var tranformMatrixInv = tranformMatrix.inverse;
@@ -199,8 +187,8 @@ public class MeshGenerator : MonoBehaviour
                 var innerLinks_remove = stringifiedExistingInnerLinks.Except(stringifiedNewInnerLinks);
 
                 // (4)
-                var stringifiedExistingOuterLinks = fea.outerLinks.Select(x => (x.fromObject.GetInstanceID(), x.toPoint));
-                var stringifiedNewOuterLinks = polygonMeshLinks.Select(link => (polygonGameObjects[link.Item1].GetInstanceID(), mesh_t.positions[link.Item2]));
+                var stringifiedExistingOuterLinks = fea.outerLinks.Select(x => (x.particle.Id, x.toPoint));
+                var stringifiedNewOuterLinks = polygonMeshLinks.Select(link => (polygonGameObjects[link.Item1].Id, mesh_t.positions[link.Item2]));
                 var outerLinks_add = stringifiedNewOuterLinks.Except(stringifiedExistingOuterLinks);
                 var outerLinks_remove = stringifiedExistingOuterLinks.Except(stringifiedNewOuterLinks);
 
@@ -224,8 +212,8 @@ public class MeshGenerator : MonoBehaviour
                 // (4)
                 foreach (var (polygonElemId, meshElemPos) in outerLinks_remove.ToList())
                 {
-                    var polygonGO = gameObjectsMap[polygonElemId];
-                    var linkToRemove = fea.outerLinks.First(j => j.fromObject == polygonGO && j.toPoint == meshElemPos);
+                    var polygonParticle = gameObjectsMap[polygonElemId];
+                    var linkToRemove = fea.outerLinks.First(j => j.particle.Id == polygonParticle.Id && j.toPoint == meshElemPos);
 
                     this.connectionSpringDrawer.RemoveConnection(linkToRemove.objs.Item1, linkToRemove.objs.Item2);
 
@@ -248,44 +236,44 @@ public class MeshGenerator : MonoBehaviour
                     fea.innerMeshElements.Remove(innerMashPos);
                 }
                 // (1)
-                foreach (var go in polygonNode_remove.Select(nodeId => gameObjectsMap[nodeId]))
+                foreach (var p in polygonNode_remove.Select(nodeId => gameObjectsMap[nodeId]))
                 {
-                    go.SetActive(false);
+                    p.gameObject.SetActive(false);
                     fea.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
                     {
-                        gameObject = go,
-                        lastPosition = TopologyFunctions.TranformPoint(tranformMatrixInv, getGameObjectPosition(go)),
+                        particle = p,
+                        lastPosition = TopologyFunctions.TranformPoint(tranformMatrixInv, p.Position),
                     });
                 }
                 foreach (var instanceId in restElements_remove)
                 {
-                    var go = gameObjectsMap[instanceId];
-                    go.SetActive(false);
+                    var p = gameObjectsMap[instanceId];
+                    p.gameObject.SetActive(false);
                     fea.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
                     {
-                        gameObject = go,
-                        lastPosition = TopologyFunctions.TranformPoint(tranformMatrixInv, getGameObjectPosition(go)),
+                        particle = p,
+                        lastPosition = TopologyFunctions.TranformPoint(tranformMatrixInv, p.Position),
                     });
                 }
 
                 // (1)
                 foreach (var nodeId in polygonNode_add)
                 {
-                    var go = gameObjectsMap[nodeId];
-                    go.tag = Tags.FEM_EDGE_PARTICLE;
+                    var p = gameObjectsMap[nodeId];
+                    p.Type = Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE;
 
                     Tuple<float, float> pos = null;
-                    fea.hiddenNodes.Where(n => n.gameObject == go).ToList().ForEach(hiddenNode =>
+                    fea.hiddenNodes.Where(n => n.particle == p).ToList().ForEach(hiddenNode =>
                     {
-                        setGameObjectPosition(go, TopologyFunctions.TranformPoint(tranformMatrix, hiddenNode.lastPosition));
+                        p.Position = TopologyFunctions.TranformPoint(tranformMatrix, hiddenNode.lastPosition);
                         pos = hiddenNode.lastPosition;
                         fea.hiddenNodes.Remove(hiddenNode);
-                        go.SetActive(true);
+                        p.gameObject.SetActive(true);
                     });
 
                     if (pos == null)
                     {
-                        pos = TopologyFunctions.TranformPoint(tranformMatrixInv, getGameObjectPosition(go));
+                        pos = TopologyFunctions.TranformPoint(tranformMatrixInv, p.Position);
                     }
 
                     fea.currentPolygon.Add(new ElementGroupGameObject.PolygonElement()
@@ -306,11 +294,9 @@ public class MeshGenerator : MonoBehaviour
                     var position = TopologyFunctions.TranformPoint(tranformMatrix, p_t);
                     fea.innerMeshElements.Add(p_t, CreateInnerMesh(TopologyFunctions.TranformPoint(tranformMatrix, position), spawnee, spawneeRotation, feaContainer.transform));
                 }
-                //Debug.Log(fea.innerMeshElements.Keys.Select(x => x).ToList());
                 // (3)
                 foreach (var (p1, p2) in innerLinks_add)
                 {
-                    //Debug.Log(p1 + " " + p2);
                     var p1GO = fea.innerMeshElements[p1];
                     var p2GO = fea.innerMeshElements[p2];
 
@@ -326,10 +312,12 @@ public class MeshGenerator : MonoBehaviour
                 foreach (var (goId, meshElemPos) in outerLinks_add)
                 {
                     var meshElemGO = fea.innerMeshElements[meshElemPos];
-                    var polyGO = gameObjectsMap[goId];
+                    var polygonParticle = gameObjectsMap[goId];
+
+                    var polyGO = polygonParticle.gameObject;
                     fea.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint
                     {
-                        fromObject = polyGO,
+                        particle = polygonParticle,
                         toPoint = meshElemPos,
                         objs = (polyGO, meshElemGO),
                     });
@@ -344,8 +332,8 @@ public class MeshGenerator : MonoBehaviour
             if (!changed && polygon.polygon.Count >= minStringSize)
             {
                 // Create new FEA model
-                List<GameObject> polygonGameObjects = polygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
-                List<Tuple<float, float>> polygonPositions = polygonGameObjects.Select(go => getGameObjectPosition(go)).ToList();
+                List<Particle> polygonGameObjects = polygon.polygon.Select(ind => gameObjectsMap[ind]).ToList();
+                List<Tuple<float, float>> polygonPositions = polygonGameObjects.Select(p => p.Position).ToList();
 
                 var mesh = PolygonToMesh(polygonPositions, meshSize, bufferInside);
 
@@ -390,12 +378,12 @@ public class MeshGenerator : MonoBehaviour
                     var toPoint = mesh.positions[meshConnectionIndex];
                     fea.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint()
                     {
-                        fromObject = polygonGameObjects[polygonConnectionIndex],
-                        toPoint = mesh.positions[meshConnectionIndex],
-                        objs = (polygonGameObjects[polygonConnectionIndex], fea.innerMeshElements[toPoint]),
+                        particle = polygonGameObjects[polygonConnectionIndex],
+                        toPoint = toPoint,
+                        objs = (polygonGameObjects[polygonConnectionIndex].gameObject, fea.innerMeshElements[toPoint]),
                     });
                     this.connectionSpringDrawer.AddConnection(
-                        polygonGameObjects[polygonConnectionIndex],
+                        polygonGameObjects[polygonConnectionIndex].gameObject,
                         fea.innerMeshElements[toPoint]
                         );
                 }
@@ -403,19 +391,19 @@ public class MeshGenerator : MonoBehaviour
                 polygon.getNonPolygonElements()
                     .ForEach(id =>
                     {
-                        var go = gameObjectsMap[id];
-                        go.SetActive(false);
+                        var p = gameObjectsMap[id];
+                        p.gameObject.SetActive(false);
                         fea.hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
                         {
-                            gameObject = go,
-                            lastPosition = getGameObjectPosition(go),
+                            particle = p,
+                            lastPosition = p.Position,
                         });
                     });
 
                 polygon.polygon
                     .Select(x => gameObjectsMap[x])
                     .ToList()
-                    .ForEach(node => node.tag = Tags.FEM_EDGE_PARTICLE);
+                    .ForEach(node => node.Type = Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE);
 
                 FEAs.Add(fea);
 
@@ -436,7 +424,7 @@ public class MeshGenerator : MonoBehaviour
         return (currentLength - anchorLength) * con_spring.spring;
     }
 
-    public IEnumerable<(ElementGroupGameObject.InnerSpringJoint, float)> MonitorMesh(Dictionary<int, GameObject> gameObjectsMap)
+    public IEnumerable<(ElementGroupGameObject.InnerSpringJoint, float)> MonitorMesh()
     {
         return FEAs.Select(fea =>
         {
@@ -543,7 +531,7 @@ public class MeshGenerator : MonoBehaviour
             rb.constraints = rb.constraints | RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationY | RigidbodyConstraints.FreezeRotationZ;
         }
 
-        go.tag = Tags.FEM_CENTER_PARTICLE;
+        // go.tag = Tags.FEM_CENTER_PARTICLE;
         return go;
     }
 
