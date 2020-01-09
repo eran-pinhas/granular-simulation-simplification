@@ -155,7 +155,7 @@ public class CycleFinder
 
                     if (secontNode != -1)
                     {
-                        UnityEngine.Debug.LogAssertion(String.Format("More that 2 cycles for 1 edge - prev c != -1 - {0} {1} {2}", cycle.Count, cycles[firstNode].Count, cycles[secontNode].Count));
+                        UnityEngine.Debug.LogAssertion(String.Format("More that 2 cycles for 1 edge - {0} {1} {2}", cycle.Count, cycles[firstNode].Count, cycles[secontNode].Count));
                         throw new UnityEngine.UnityException();
                     }
                     edgesMap[edgeName] = (firstNode, c, edgeType);

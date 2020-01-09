@@ -6,6 +6,7 @@ using UnityEngine;
 public class Particle : MonoBehaviour
 {
     static GameObject particlesContainer;
+    static int current_id;
     static Particle()
     {
         particlesContainer = new GameObject("Particles");
@@ -21,7 +22,9 @@ public class Particle : MonoBehaviour
         var cl = go.AddComponent<ColliderManager>();
         cl.collisionListener = collisionListener;
         var p = go.AddComponent<Particle>();
-        p._id = (int) (1000000 * UnityEngine.Random.value);
+        p._id = current_id;
+        
+        current_id++;
         return p;
     }
     public enum PARTICLE_TYPE

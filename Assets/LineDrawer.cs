@@ -17,11 +17,14 @@ public class LineDrawer
         lr = line.AddComponent<LineRenderer>();
         lr.startWidth = 0.5f;
         lr.endWidth = 0.5f;
+        setColor(color);
+        line.transform.parent = GameObject.Find("DrawedLines").transform;
+    }
+
+    public void setColor(Color color){
         lr.startColor = color;
         lr.endColor = color;
         lr.material.color = color;
-
-        line.transform.parent = GameObject.Find("DrawedLines").transform;
     }
 
     private List<Particle> particles = new List<Particle>();

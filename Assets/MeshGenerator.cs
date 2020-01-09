@@ -20,6 +20,20 @@ public class MeshGenerator : MonoBehaviour
             public ValueTuple<GameObject, GameObject> objs;
             public Tuple<float, float> fromPoint;
             public Tuple<float, float> toPoint;
+
+
+
+            public float GetForce(ConnectionSpringDrawer drawer)
+            {
+                var con_spring = drawer.getSpringJoint(objs.Item1, objs.Item2);
+                var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
+                var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
+                float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
+                float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
+
+                return (currentLength - anchorLength) * con_spring.spring;
+            }
+
         }
         public class OuterSpringJoint
         {
@@ -50,11 +64,14 @@ public class MeshGenerator : MonoBehaviour
         public Color color;
         public int id;
 
+        static int currentId = 1;
+
         public ElementGroupGameObject()
         {
             color = Color.HSVToRGB(UnityEngine.Random.value, 0.73f, 0.96f);
             lineDrawer = new LineDrawer(new Vector3(0, 0, -10), color);
-            id = (int) (1000000 * UnityEngine.Random.value);
+            id = currentId;
+            currentId++;
         }
     }
 
@@ -122,20 +139,29 @@ public class MeshGenerator : MonoBehaviour
             if (fea.status == ElementGroupGameObject.STATUS.CRACKING)
                 return;
 
-            foreach (var touchingPolygon in polygons.Where(p => p.isTouchingExistingFEM))
+
+            // filtering out any polygons that are touching FEAs which are not this
+            var touchingPolygons = polygons
+                .Where(group => group.isTouchingExistingFEM)
+                .Where(group => !group.polygon
+                    .Select(p_id => gameObjectsMap[p_id])
+                    .Any(p => p.Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE && p.particleGroupId != fea.id));
+                
+            foreach (var touchingPolygon in touchingPolygons)
             {
                 var hasOtherFeaParticles = touchingPolygon.polygon
                     .Concat(touchingPolygon.restElements)
                     .Select(i => gameObjectsMap[i])
-                    .Any(p=>p.particleGroupId > 0 && p.particleGroupId != fea.id);
-                
-                if (hasOtherFeaParticles || changed || touchingPolygon.sourceCycles.Count < 5) 
+                    .Any(p => p.particleGroupId > 0 && p.particleGroupId != fea.id);
+
+                if (hasOtherFeaParticles || changed || touchingPolygon.sourceCycles.Count < 5)
                     continue;
-                
+
                 var unifiedCycles = touchingPolygon.sourceCycles
                     .Concat(new List<List<int>>() {
                         fea.currentPolygon.GetRange(0, fea.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
                     }).ToList();
+
                 var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false, instanceId => gameObjectsMap[instanceId].Position);
 
 
@@ -417,17 +443,7 @@ public class MeshGenerator : MonoBehaviour
         FEAs.ForEach(fea => fea.lineDrawer.setPoints(fea.currentPolygon.Select(x => gameObjectsMap[x.instanceId])));
     }
 
-    private static float GetForce(SpringJoint con_spring)
-    {
-        var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
-        var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
-        float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
-        float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
-
-        return (currentLength - anchorLength) * con_spring.spring;
-    }
-
-    public IEnumerable<(ElementGroupGameObject.InnerSpringJoint, float)> MonitorMesh()
+    public IEnumerable<(ElementGroupGameObject.InnerSpringJoint, float, ElementGroupGameObject)> MonitorMesh()
     {
         return FEAs.Select(fea =>
         {
@@ -436,8 +452,7 @@ public class MeshGenerator : MonoBehaviour
 
             fea.innerLinks.ForEach(ij =>
             {
-                var con_spring = connectionSpringDrawer.getSpringJoint(ij.objs.Item1, ij.objs.Item2);
-                var force = GetForce(con_spring);
+                var force = ij.GetForce(connectionSpringDrawer);
                 var col = Color.green;
                 // push 
                 if (connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID())))
@@ -465,24 +480,29 @@ public class MeshGenerator : MonoBehaviour
                 connectionSpringDrawer.SetColor(ij.objs.Item1, ij.objs.Item2, col);
             });
 
-            return (innerJoint, maxPull);
+            return (innerJoint, maxPull, fea);
         });
 
     }
 
-    // public void StartCrackPropagation(ElementGroupGameObject.InnerSpringJoint ij)
-    // {
-    //     if (SingleFEAData.status != ElementGroupGameObject.STATUS.CRACKING)
-    //     {
-    //         SingleFEAData.status = ElementGroupGameObject.STATUS.CRACKING;
+    public void maxPullExceeded(ElementGroupGameObject fea, ElementGroupGameObject.InnerSpringJoint ij)
+    {
+        if (fea.status != ElementGroupGameObject.STATUS.CRACKING)
+        {
+            fea.status = ElementGroupGameObject.STATUS.CRACKING;
 
-    //         Debug.Log("StartCrackPropagation");
+            Debug.Log("StartCrackPropagation");
 
-    //         connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
-    //         //SingleFEAData.innerLinks.Remove(ij);
-    //         //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
-    //     }
-    // }
+            connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
+            fea.lineDrawer.setColor(Color.red);
+            //SingleFEAData.innerLinks.Remove(ij);
+            //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
+        }
+        else
+        {
+            Debug.Log("There's some more Crack Propagation");
+        }
+    }
 
     /* public void CalculateCrack((Tuple<float, float>, Tuple<float, float>) crackStart) // Dictionary<int, GameObject> gameObjectsMap
      {

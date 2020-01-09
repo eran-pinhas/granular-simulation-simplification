@@ -12,7 +12,7 @@ public class Creator : MonoBehaviour
 
     public Vector3 scaleRandomPart;
 
-    System.Random rand = new System.Random();
+    static System.Random rand = new System.Random();
 
     DateTime lastTimeCreated;
     int createdCount = 0;

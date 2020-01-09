@@ -27,10 +27,15 @@ public class FEA : MonoBehaviour, ICollisionListener
         var maxs = meshGenerator.MonitorMesh();
         var maxMaxPull = maxs.Select(m => m.Item2).DefaultIfEmpty(-1).Max();
         reporter.reportNew(maxMaxPull > float.MinValue ? maxMaxPull : -1, Time.time);
-        if (maxMaxPull > MaxForce)
-        {
-            // meshGenerator.StartCrackPropagation(maxPullJoint);
-        }
+
+        maxs.ToList().ForEach(max=>{
+            var (joint,pull, fea) = max;
+            if (maxMaxPull > MaxForce)
+            {
+                meshGenerator.maxPullExceeded(fea, joint);
+            }
+        });
+        
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
         try
