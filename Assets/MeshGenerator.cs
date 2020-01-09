@@ -123,7 +123,7 @@ public class MeshGenerator : MonoBehaviour
     }
 
     int tries = 0;
-    public void CreateFea(List<CycleFinder.ElementGroupPolygon> polygons,
+    public void CreateFea(List<CycleFinder.ElementGroupPolygon> groupPolygons,
         Dictionary<int, Particle> gameObjectsMap,
         GameObject spawnee,
         Quaternion spawneeRotation
@@ -141,12 +141,12 @@ public class MeshGenerator : MonoBehaviour
 
 
             // filtering out any polygons that are touching FEAs which are not this
-            var touchingPolygons = polygons
+            var touchingPolygons = groupPolygons
                 .Where(group => group.isTouchingExistingFEM)
                 .Where(group => !group.polygon
                     .Select(p_id => gameObjectsMap[p_id])
                     .Any(p => p.Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE && p.particleGroupId != fea.id));
-                
+
             foreach (var touchingPolygon in touchingPolygons)
             {
                 var hasOtherFeaParticles = touchingPolygon.polygon
@@ -157,10 +157,17 @@ public class MeshGenerator : MonoBehaviour
                 if (hasOtherFeaParticles || changed || touchingPolygon.sourceCycles.Count < 5)
                     continue;
 
+                var feaPolygonIds = new HashSet<int>(fea.currentPolygon.Select(p => p.instanceId));
+                var feaPolygonPositions = fea.currentPolygon.Select(p => gameObjectsMap[p.instanceId].Position).ToList();
+
                 var unifiedCycles = touchingPolygon.sourceCycles
+                    // Removing particles stuck in the inside
+                    .Where(cycle => cycle.All(p => feaPolygonIds.Contains(p) || TopologyFunctions.PointInPolygon(feaPolygonPositions, gameObjectsMap[p].Position,0)))
+                    // Adding the current polygon itself
                     .Concat(new List<List<int>>() {
                         fea.currentPolygon.GetRange(0, fea.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
-                    }).ToList();
+                    })
+                    .ToList();
 
                 var unifiedPolygons = CycleFinder.FindAdjacantCicles(unifiedCycles, x => false, instanceId => gameObjectsMap[instanceId].Position);
 
@@ -356,7 +363,8 @@ public class MeshGenerator : MonoBehaviour
             }
 
         });
-        foreach (var polygon in polygons)
+
+        foreach (var polygon in groupPolygons)
         {
             if (!changed && polygon.polygon.Count >= minStringSize)
             {
