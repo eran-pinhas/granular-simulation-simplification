@@ -9,7 +9,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     public float damp;
 
     Dictionary<(int, int), SpringJoint> springs = new Dictionary<(int, int), SpringJoint>();
-    List<(int, int)> eliminated = new List<(int, int)>();
+    HashSet<(int, int)> eliminated = new HashSet<(int, int)>();
     // Start is called before the first frame update
     public override void Start()
     {
@@ -74,7 +74,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
         }
     }
 
-    public List<(int, int)> getEliminated()
+    public HashSet<(int, int)> getEliminated()
     {
         return eliminated;
     }

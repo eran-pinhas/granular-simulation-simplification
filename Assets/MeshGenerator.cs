@@ -5,7 +5,7 @@ using UnityEngine;
 using System;
 
 
-public class MeshGenerator : MonoBehaviour
+public class MeshGenerator : MonoBehaviour, ICollisionListener
 {
     public class ElementGroupGameObject
     {
@@ -53,6 +53,9 @@ public class MeshGenerator : MonoBehaviour
             CRACKING = 1,
         }
 
+        public InnerSpringJoint crackStart;
+        public InnerSpringJoint crackEnd;
+
         public List<HiddenNodes> hiddenNodes = new List<HiddenNodes>();
         public List<OuterSpringJoint> outerLinks = new List<OuterSpringJoint>();
         public List<InnerSpringJoint> innerLinks = new List<InnerSpringJoint>();
@@ -84,6 +87,17 @@ public class MeshGenerator : MonoBehaviour
     public float bufferInside;
     public int minStringSize;
     public float PPTestMin;
+    public float maxForce = 1500f;
+    public float propagateMaxForce = 700f;
+    public Reporter reporter;
+    public GameObject spawnee;
+    public Transform pos;
+    public ConnectionDrawer connectionDrawer;
+    
+    public Dictionary<int, Dictionary<int, bool>> collisions = new Dictionary<int, Dictionary<int, bool>>();
+
+    private List<Particle> children = new List<Particle>();
+    private Dictionary<int, Particle> childrenDict = new Dictionary<int, Particle>();
     public static Mesh PolygonToMesh(List<Tuple<float, float>> polygonPositions, float meshSize, float bufferInside)
     {
         var extent = TopologyFunctions.ExtactExtent(polygonPositions);
@@ -102,10 +116,9 @@ public class MeshGenerator : MonoBehaviour
         return mesh;
     }
 
-    // Start is called before the first frame update
     void Start()
     {
-
+        new GameObject("FEA_data");
     }
 
     private List<ElementGroupGameObject> FEAs = new List<ElementGroupGameObject>();
@@ -162,7 +175,7 @@ public class MeshGenerator : MonoBehaviour
 
                 var unifiedCycles = touchingPolygon.sourceCycles
                     // Removing particles stuck in the inside
-                    .Where(cycle => cycle.All(p => feaPolygonIds.Contains(p) || TopologyFunctions.PointInPolygon(feaPolygonPositions, gameObjectsMap[p].Position,0)))
+                    .Where(cycle => cycle.All(p => feaPolygonIds.Contains(p) || !TopologyFunctions.PointInPolygon(feaPolygonPositions, gameObjectsMap[p].Position, 0)))
                     // Adding the current polygon itself
                     .Concat(new List<List<int>>() {
                         fea.currentPolygon.GetRange(0, fea.currentPolygon.Count - 1).Select(x=>x.instanceId).ToList()
@@ -465,12 +478,9 @@ public class MeshGenerator : MonoBehaviour
                 // push 
                 if (connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID())))
                 {
-                    col = Color.yellow;
+                    col = Color.black;
                 }
-                else if (force < 0)
-                {
-
-                }
+                else if (force < 0) { }
                 // pull
                 else
                 {
@@ -500,6 +510,8 @@ public class MeshGenerator : MonoBehaviour
             fea.status = ElementGroupGameObject.STATUS.CRACKING;
 
             Debug.Log("StartCrackPropagation");
+            fea.crackStart = ij;
+            fea.crackEnd = ij;
 
             connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
             fea.lineDrawer.setColor(Color.red);
@@ -508,7 +520,24 @@ public class MeshGenerator : MonoBehaviour
         }
         else
         {
-            Debug.Log("There's some more Crack Propagation");
+            var (new1, new2) = (ij.fromPoint, ij.toPoint);
+            var (current1, current2) = (fea.crackEnd.fromPoint, fea.crackEnd.toPoint);
+
+            if (ij == fea.crackStart)
+                Debug.Log("if((ij.fromPoint, ij.toPoint) == fea.crackStart)");
+            else if (ij == fea.crackEnd)
+                Debug.Log("if((ij.fromPoint, ij.toPoint) == fea.crackEnd)");
+            else if (new1 == current1 || new1 == current2 || new2 == current1 || new1 == current2)
+            {
+                Debug.Log("continue propegating");
+                fea.crackEnd = ij;
+                connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
+            }
+            else
+            {
+                Debug.Log("propogate not related");
+            }
+
         }
     }
 
@@ -564,9 +593,54 @@ public class MeshGenerator : MonoBehaviour
         return go;
     }
 
-    // Update is called once per frame
+
+    public void informNewChild(Particle obj)
+    {
+        children.Add(obj);
+        childrenDict.Add(obj.Id, obj);
+        collisions.Add(obj.Id, new Dictionary<int, bool>());
+    }
+
+    public void informCollision(Particle a, Particle b)
+    {
+        collisions[a.Id].Add(b.Id, true); // , line
+        this.connectionDrawer.AddConnection(a.gameObject, b.gameObject);
+    }
+
+    public void informCollisionRemoved(Particle a, Particle b)
+    {
+        this.connectionDrawer.RemoveConnection(a.gameObject, b.gameObject);
+        collisions[a.Id].Remove(b.Id);
+    }
+
     void Update()
     {
         FEAs.ForEach(fea => fea.lineDrawer.updatePositions());
+
+
+        var maxs = MonitorMesh();
+        var maxMaxPull = maxs.Select(m => m.Item2).DefaultIfEmpty(-1).Max();
+        reporter.reportNew(maxMaxPull > float.MinValue ? maxMaxPull : -1, Time.time);
+
+        maxs.ToList().ForEach(max =>
+        {
+            var (joint, pull, fea) = max;
+            var feaMaxForce = fea.status == ElementGroupGameObject.STATUS.FREE ? maxForce : propagateMaxForce;
+            if (maxMaxPull > feaMaxForce)
+            {
+                maxPullExceeded(fea, joint);
+            }
+        });
+
+        var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
+        try
+        {
+            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE, instanceId => childrenDict[instanceId].Position);
+            CreateFea(adj, childrenDict, spawnee, pos.rotation);
+        }
+        catch (Exception e)
+        {
+            Debug.Log(e.ToString());
+        }
     }
 };

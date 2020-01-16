@@ -12,8 +12,8 @@ public class Crane : MonoBehaviour
     public float carneXSensitivity = 10f;
     public float hookSensitivity = 3f;
     private float hookAngle = 0f;
-    private float beamAngle = 0f;
-    private float beamLength = 40f;
+    private float beamAngle = 10f;
+    private float beamLength = 20f;
     private float craneX = 0f;
     // Start is called before the first frame update
     void Start()

@@ -7,7 +7,7 @@ public class Creator : MonoBehaviour
     public Transform pos;
     public int NumOfElements;
     public int WaitTime;
-    public FEA fea;
+    public MeshGenerator fea;
     public Vector3 RandPart;
 
     public Vector3 scaleRandomPart;
