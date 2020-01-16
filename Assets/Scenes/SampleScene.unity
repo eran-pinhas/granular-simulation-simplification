@@ -1718,14 +1718,15 @@ MonoBehaviour:
   damper: 30000
   allowRotation: 0
   meshSize: 3.5
-  bufferInside: 0.5
+  bufferInside: 0.8
   minStringSize: 70
-  PPTestMin: 0.2
-  maxForce: 1500
-  propagateMaxForce: 700
+  PPTestMin: 0.3
+  maxForce: 1300
+  propagateMaxForce: 70
+  adaptation: 0.2
   reporter: {fileID: 2097349680}
-  spawnee: {fileID: 2071503224184193714, guid: 751c9bb0b2d1a274ca770f684c95b14a, type: 3}
-  pos: {fileID: 2097349677}
+  spawnee: {fileID: 8562859477550952187, guid: 4477357020d71244d9e2c552d1068fb8, type: 3}
+  pos: {fileID: 15300817}
   connectionDrawer: {fileID: 2097349682}
 --- !u!114 &2097349682
 MonoBehaviour:

@@ -193,17 +193,17 @@ public class TopologyFunctions
         return false; // Doesn't fall in any of the above cases 
     }
 
-    public static double PolsbyPopper(List<Tuple<float,float>> poly)
+    public static double PolsbyPopper(List<Tuple<float, float>> poly)
     {
-        var points = new List<Tuple<float,float>>(poly);
+        var points = new List<Tuple<float, float>>(poly);
         points.Add(points[0]);
         var area = Math.Abs(points.Take(points.Count - 1)
         .Select((p, i) => (points[i + 1].Item1 - p.Item1) * (points[i + 1].Item2 + p.Item2))
         .Sum() / 2);
 
-        var perimiter = poly.Select((p,i)=> Distance( points[i + 1], p)).Sum();
+        var perimiter = poly.Select((p, i) => Distance(points[i + 1], p)).Sum();
 
-        return Math.PI*4 *area/(perimiter*perimiter);
+        return Math.PI * 4 * area / (perimiter * perimiter);
     }
 
     // Returns true if the point p lies inside the polygon[] with n vertices 
@@ -259,6 +259,7 @@ public class TopologyFunctions
 
     public static List<ValueTuple<int, int>> ConnectOuterPolygonToMesh(List<Tuple<float, float>> polygon, Mesh mesh)
     {
+        int MOD = 2;
         var polygonLength = polygon.Count - 1;
         var links = new List<ValueTuple<int, int>>();
 
@@ -289,6 +290,16 @@ public class TopologyFunctions
             }
             twoNearestNeighborsDict[i] = (nearestNeighbor, nearestNeighbor2);
             minSumSquareDict[i] = lengthSquaredDict[(i, nearestNeighbor)] + lengthSquaredDict[(i, nearestNeighbor2)];
+
+        }
+
+        if (MOD == 2)
+        {
+            return twoNearestNeighborsDict
+                .Where(kv => kv.Key < polygon.Count - 1)
+                .SelectMany(kv => new List<(int, int)>() { (kv.Key, kv.Value.Item1), (kv.Key, kv.Value.Item2) })
+                .Distinct()
+                .ToList();
         }
 
         var prevNodeIndex = polygonLength - 1;

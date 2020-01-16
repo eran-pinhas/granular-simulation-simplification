@@ -25,7 +25,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
 
 
-            public void updateForce(ConnectionSpringDrawer drawer)
+            public void updateForce(ConnectionSpringDrawer drawer, float adaptation)
             {
                 var con_spring = drawer.getSpringJoint(objs.Item1, objs.Item2);
                 var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
@@ -34,7 +34,6 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
 
                 var messure = (currentLength - anchorLength) * con_spring.spring;
-                float adaptation = 0.02f;
 
                 force = messure * adaptation + force * (1 - adaptation);
             }
@@ -122,6 +121,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     public float PPTestMin;
     public float maxForce = 1500f;
     public float propagateMaxForce = 700f;
+    public float adaptation = 0.2f;
     public Reporter reporter;
     public GameObject spawnee;
     public Transform pos;
@@ -703,7 +703,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         FEAs.ForEach(fea =>
         {
             fea.lineDrawer.updatePositions();
-            fea.innerLinks.ForEach(ij => ij.updateForce(connectionSpringDrawer));
+            fea.innerLinks.ForEach(ij => ij.updateForce(connectionSpringDrawer, adaptation));
         });
 
 
@@ -717,14 +717,9 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         });
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
-        try
-        {
-            var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE, instanceId => childrenDict[instanceId].Position);
-            CreateFea(adj, childrenDict, spawnee, pos.rotation);
-        }
-        catch (Exception e)
-        {
-            Debug.Log(e.ToString());
-        }
+    
+        var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE, instanceId => childrenDict[instanceId].Position);
+        CreateFea(adj, childrenDict, spawnee, pos.rotation);
+        
     }
 };
