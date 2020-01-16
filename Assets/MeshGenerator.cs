@@ -21,9 +21,11 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             public Tuple<float, float> fromPoint;
             public Tuple<float, float> toPoint;
 
+            public float force = 0;
 
 
-            public float GetForce(ConnectionSpringDrawer drawer)
+
+            public void updateForce(ConnectionSpringDrawer drawer)
             {
                 var con_spring = drawer.getSpringJoint(objs.Item1, objs.Item2);
                 var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
@@ -31,7 +33,10 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
                 float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
 
-                return (currentLength - anchorLength) * con_spring.spring;
+                var messure = (currentLength - anchorLength) * con_spring.spring;
+                float adaptation = 0.02f;
+
+                force = messure * adaptation + force * (1 - adaptation);
             }
 
         }
@@ -76,6 +81,34 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             id = currentId;
             currentId++;
         }
+
+        private int getEgdeCount(InnerSpringJoint ij)
+        {
+            // adding (pos1,pos2) and (pos2,pos1) to the hashset
+            var innerJointsPositions = innerLinks.Select(x => (x.fromPoint, x.toPoint)).Concat(innerLinks.Select(x => (x.toPoint, x.fromPoint)));
+            var linksPositions = new HashSet<(Tuple<float, float>, Tuple<float, float>)>(innerJointsPositions);
+
+            var pos1 = ij.fromPoint;
+            var pos2 = ij.toPoint;
+            return innerMeshElements
+                // Iterating threw all inner nodes except this ones inner
+                .Select(innerMeshElement => innerMeshElement.Key)
+                .Except(new List<Tuple<float, float>>() { pos1, pos2 })
+                // looking for nodes that are linked to both pos1 and pos2
+                .Where(innerPos => linksPositions.Contains((pos1, innerPos)) && linksPositions.Contains((pos2, innerPos)))
+                // if there are less than 2 - this is an egde
+                .Count();
+        }
+
+        public bool isEgdeInnerJoint(InnerSpringJoint ij)
+        {
+            return getEgdeCount(ij) == 1;
+        }
+
+        public bool isDoubleEgdeInnerJoint(InnerSpringJoint ij)
+        {
+            return getEgdeCount(ij) == 0;
+        }
     }
 
     public ConnectionSpringDrawer connectionSpringDrawer;
@@ -93,7 +126,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     public GameObject spawnee;
     public Transform pos;
     public ConnectionDrawer connectionDrawer;
-    
+
     public Dictionary<int, Dictionary<int, bool>> collisions = new Dictionary<int, Dictionary<int, bool>>();
 
     private List<Particle> children = new List<Particle>();
@@ -372,7 +405,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                     });
                     this.connectionSpringDrawer.AddConnection(polyGO, meshElemGO);
                 }
-                Debug.Log(string.Format("DONE {0},{1}", polygonNode_add.Count(), polygonNode_remove.Count()));
+                // Debug.Log(string.Format("DONE {0},{1}", polygonNode_add.Count(), polygonNode_remove.Count()));
             }
 
         });
@@ -464,19 +497,26 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         FEAs.ForEach(fea => fea.lineDrawer.setPoints(fea.currentPolygon.Select(x => gameObjectsMap[x.instanceId])));
     }
 
-    public IEnumerable<(ElementGroupGameObject.InnerSpringJoint, float, ElementGroupGameObject)> MonitorMesh()
+    private bool isInnerJoinEliminated(ElementGroupGameObject.InnerSpringJoint ij)
     {
-        return FEAs.Select(fea =>
-        {
-            var maxPull = float.MinValue;
-            ElementGroupGameObject.InnerSpringJoint innerJoint = null;
+        return connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID()));
+    }
 
+    private void eliminatedInnerJoint(ElementGroupGameObject.InnerSpringJoint ij)
+    {
+        connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
+    }
+
+    public void colorizeMesh()
+    {
+        FEAs.ForEach(fea =>
+        {
             fea.innerLinks.ForEach(ij =>
             {
-                var force = ij.GetForce(connectionSpringDrawer);
+                var force = ij.force;
                 var col = Color.green;
                 // push 
-                if (connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID())))
+                if (isInnerJoinEliminated(ij))
                 {
                     col = Color.black;
                 }
@@ -486,59 +526,104 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 {
                     float colorS = Mathf.Min(1, force / 1000);
                     col = Color.HSVToRGB(0, colorS, 1);
-
-                    if (force > maxPull)
-                    {
-                        innerJoint = ij;
-                        maxPull = force;
-                    }
-
-                    if (force > maxPull) maxPull = force;
                 }
                 connectionSpringDrawer.SetColor(ij.objs.Item1, ij.objs.Item2, col);
             });
-
-            return (innerJoint, maxPull, fea);
         });
 
     }
 
-    public void maxPullExceeded(ElementGroupGameObject fea, ElementGroupGameObject.InnerSpringJoint ij)
+    private static bool isEqualOrSwitched<T>((T, T) a, (T, T) b)
     {
-        if (fea.status != ElementGroupGameObject.STATUS.CRACKING)
+        return a.Item1.Equals(b.Item1) && a.Item2.Equals(b.Item2) || a.Item1.Equals(b.Item2) && a.Item2.Equals(b.Item1);
+    }
+
+
+    private void maintainCrack(ElementGroupGameObject fea)
+    {
+        var goOn = true;
+        fea.innerLinks.ForEach(ij =>
         {
-            fea.status = ElementGroupGameObject.STATUS.CRACKING;
+            var pull = ij.force;
+            var feaMaxForce = fea.status == ElementGroupGameObject.STATUS.FREE ? maxForce : propagateMaxForce;
+            if (goOn && pull > feaMaxForce && !isInnerJoinEliminated(ij))
+            {
+                if (fea.status != ElementGroupGameObject.STATUS.CRACKING)
+                {
+                    fea.status = ElementGroupGameObject.STATUS.CRACKING;
 
-            Debug.Log("StartCrackPropagation");
-            fea.crackStart = ij;
-            fea.crackEnd = ij;
+                    Debug.Log(String.Format("StartCrackPropagation {0}", ij.force));
+                    fea.crackStart = ij;
+                    fea.crackEnd = ij;
 
-            connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
-            fea.lineDrawer.setColor(Color.red);
-            //SingleFEAData.innerLinks.Remove(ij);
-            //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
-        }
-        else
+                    eliminatedInnerJoint(ij);
+                    fea.lineDrawer.setColor(Color.red);
+                    //SingleFEAData.innerLinks.Remove(ij);
+                    //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
+                }
+                else
+                {
+                    var crackContinued = false;
+                    if (shouldContinuePropogate(fea.crackEnd, ij, fea))
+                    {
+                        fea.crackEnd = ij;
+                        eliminatedInnerJoint(ij);
+                        crackContinued = true;
+                    }
+                    else if (shouldContinuePropogate(fea.crackStart, ij, fea))
+                    {
+                        fea.crackStart = ij;
+                        eliminatedInnerJoint(ij);
+                        crackContinued = true;
+                    }
+                    else
+                    {
+                        Debug.Log("propogate not related");
+                    }
+
+                    if (crackContinued)
+                    {
+                        goOn = false;
+                        if (fea.crackStart != fea.crackEnd && fea.isEgdeInnerJoint(fea.crackStart) && fea.isEgdeInnerJoint(fea.crackEnd)
+                         || fea.crackStart == fea.crackEnd && fea.isDoubleEgdeInnerJoint(fea.crackStart))
+                        {
+                            Debug.Log("Done propagating");
+                        }
+                        else
+                        {
+                            Debug.Log("continue propegating");
+                        }
+                    }
+
+                }
+            }
+        });
+    }
+
+    private bool shouldContinuePropogate(ElementGroupGameObject.InnerSpringJoint current, ElementGroupGameObject.InnerSpringJoint newIJ, ElementGroupGameObject fea)
+    {
+        var (cur1, cur2) = (current.fromPoint, current.toPoint);
+        var (new1, new2) = (newIJ.fromPoint, newIJ.toPoint);
+
+        var items = new HashSet<Tuple<float, float>>() { cur1, cur2, new1, new2 };
+        if (items.Count <= 2)
         {
-            var (new1, new2) = (ij.fromPoint, ij.toPoint);
-            var (current1, current2) = (fea.crackEnd.fromPoint, fea.crackEnd.toPoint);
-
-            if (ij == fea.crackStart)
-                Debug.Log("if((ij.fromPoint, ij.toPoint) == fea.crackStart)");
-            else if (ij == fea.crackEnd)
-                Debug.Log("if((ij.fromPoint, ij.toPoint) == fea.crackEnd)");
-            else if (new1 == current1 || new1 == current2 || new2 == current1 || new1 == current2)
-            {
-                Debug.Log("continue propegating");
-                fea.crackEnd = ij;
-                connectionSpringDrawer.eliminateSpringJoint(ij.objs.Item1, ij.objs.Item2);
-            }
-            else
-            {
-                Debug.Log("propogate not related");
-            }
-
+            Debug.Log("ISSUE - same item found - should have been eliminated");
         }
+        else if (items.Count == 3)
+        {
+            var newOne = items.Except(new HashSet<Tuple<float, float>>() { cur1, cur2 }).Single();
+            var endOne = items.Except(new HashSet<Tuple<float, float>>() { new1, new2 }).Single();
+            var mutualOne = items.Except(new HashSet<Tuple<float, float>>() { newOne, endOne }).Single();
+
+            // if propagates from connection 1-2 to 2-3 we would like to have the 1-3 connection
+            var nextIsConnectedToPrevious = fea.innerLinks.Any(ij => isEqualOrSwitched((ij.fromPoint, ij.toPoint), (newOne, endOne)) && !isInnerJoinEliminated(ij));
+            if (nextIsConnectedToPrevious)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /* public void CalculateCrack((Tuple<float, float>, Tuple<float, float>) crackStart) // Dictionary<int, GameObject> gameObjectsMap
@@ -615,21 +700,20 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
     void Update()
     {
-        FEAs.ForEach(fea => fea.lineDrawer.updatePositions());
+        FEAs.ForEach(fea =>
+        {
+            fea.lineDrawer.updatePositions();
+            fea.innerLinks.ForEach(ij => ij.updateForce(connectionSpringDrawer));
+        });
 
 
-        var maxs = MonitorMesh();
-        var maxMaxPull = maxs.Select(m => m.Item2).DefaultIfEmpty(-1).Max();
+        colorizeMesh();
+        var maxMaxPull = FEAs.Select(fea => fea.innerLinks.Select(ij => ij.force).Max()).DefaultIfEmpty(-1).Max();
         reporter.reportNew(maxMaxPull > float.MinValue ? maxMaxPull : -1, Time.time);
 
-        maxs.ToList().ForEach(max =>
+        FEAs.ForEach(fea =>
         {
-            var (joint, pull, fea) = max;
-            var feaMaxForce = fea.status == ElementGroupGameObject.STATUS.FREE ? maxForce : propagateMaxForce;
-            if (maxMaxPull > feaMaxForce)
-            {
-                maxPullExceeded(fea, joint);
-            }
+            maintainCrack(fea);
         });
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);

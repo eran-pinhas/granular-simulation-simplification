@@ -14,7 +14,7 @@ public class Crane : MonoBehaviour
     private float hookAngle = 0f;
     private float beamAngle = 10f;
     private float beamLength = 20f;
-    private float craneX = 0f;
+    private float craneX = -20f;
     // Start is called before the first frame update
     void Start()
     {
