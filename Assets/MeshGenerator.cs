@@ -33,9 +33,14 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
                 float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
 
-                var messure = (currentLength - anchorLength) * con_spring.spring;
+                var current_force_messure = (currentLength - anchorLength) * con_spring.spring;
 
-                force = messure * adaptation + force * (1 - adaptation);
+                force = current_force_messure * adaptation + force * (1 - adaptation);
+
+                
+                var csj = con_spring.gameObject.GetComponent<CustomSpringJoint>();
+                csj.parallelForce = current_force_messure;
+
             }
 
         }

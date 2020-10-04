@@ -56,9 +56,12 @@ public class ConnectionSpringDrawer : ConnectionDrawer
 
         var anchor = new Vector3((bPos.Item1 - aPos.Item1) / baseObjectTransform.lossyScale.x, 0, (bPos.Item2 - aPos.Item2) / baseObjectTransform.lossyScale.z);
         anchor = Vector3.Scale(anchor, baseObjectTransform.lossyScale);
+        
+        // sj.anchor = Vector3.zero;
+        // sj.connectedAnchor = anchor;
 
-        sj.anchor = Vector3.zero;
-        sj.connectedAnchor = anchor;
+        var csj = sj.gameObject.AddComponent<CustomSpringJoint>();
+        csj.realAnchor = anchor;
     }
 
 
