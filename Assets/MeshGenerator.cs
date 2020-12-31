@@ -27,19 +27,19 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
             public void updateForce(ConnectionSpringDrawer drawer, float adaptation)
             {
-                var con_spring = drawer.getSpringJoint(objs.Item1, objs.Item2);
-                var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
-                var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
-                float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
-                float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
+                //var con_spring = drawer.getSpringJoint(objs.Item1, objs.Item2);
+                //var baseObjectTransform = con_spring.gameObject.GetComponent<Transform>();
+                //var connObjectTransform = con_spring.connectedBody.gameObject.GetComponent<Transform>();
+                //float anchorLength = Vector3.Scale(con_spring.anchor - con_spring.connectedAnchor, baseObjectTransform.lossyScale).magnitude;
+                //float currentLength = (baseObjectTransform.position - connObjectTransform.position).magnitude;
 
-                var current_force_messure = (currentLength - anchorLength) * con_spring.spring;
+                //var current_force_messure = (currentLength - anchorLength) * con_spring.spring;
 
-                force = current_force_messure * adaptation + force * (1 - adaptation);
+                //force = current_force_messure * adaptation + force * (1 - adaptation);
 
-                
-                var csj = con_spring.gameObject.GetComponent<CustomSpringJoint>();
-                csj.parallelForce = current_force_messure;
+
+                //var csj = con_spring.gameObject.GetComponent<CustomSpringJoint>();
+                //csj.parallelForce = current_force_messure;
 
             }
 
@@ -408,7 +408,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                         toPoint = meshElemPos,
                         objs = (polyGO, meshElemGO),
                     });
-                    this.connectionSpringDrawer.AddConnection(polyGO, meshElemGO);
+                    this.connectionSpringDrawer.AddConnectionWithAnchor(polyGO, meshElemGO, polygonParticle.Position, meshElemPos);
                 }
                 // Debug.Log(string.Format("DONE {0},{1}", polygonNode_add.Count(), polygonNode_remove.Count()));
             }
@@ -464,16 +464,20 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 foreach (var (polygonConnectionIndex, meshConnectionIndex) in polygonMeshLinks)
                 {
                     var toPoint = mesh.positions[meshConnectionIndex];
-                    fea.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint()
+                    var osj = new ElementGroupGameObject.OuterSpringJoint()
                     {
                         particle = polygonGameObjects[polygonConnectionIndex],
                         toPoint = toPoint,
                         objs = (polygonGameObjects[polygonConnectionIndex].gameObject, fea.innerMeshElements[toPoint]),
-                    });
-                    this.connectionSpringDrawer.AddConnection(
-                        polygonGameObjects[polygonConnectionIndex].gameObject,
-                        fea.innerMeshElements[toPoint]
-                        );
+                    };
+                    fea.outerLinks.Add(osj);
+
+                    this.connectionSpringDrawer.AddConnectionWithAnchor(
+                        osj.particle.gameObject,
+                        fea.innerMeshElements[toPoint],
+                        osj.particle.Position,
+                        osj.toPoint
+                    );
                 }
 
                 polygon.getNonPolygonElements()
@@ -694,7 +698,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     public void informCollision(Particle a, Particle b)
     {
         collisions[a.Id].Add(b.Id, true); // , line
-        this.connectionDrawer.AddConnection(a.gameObject, b.gameObject);
+        this.connectionDrawer.DrawConnection(a.gameObject, b.gameObject);
     }
 
     public void informCollisionRemoved(Particle a, Particle b)
@@ -722,9 +726,9 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         });
 
         var cycles = CycleFinder.Find<bool>(childrenDict.Select(t => t.Key), collisions, 3);
-    
+
         var adj = CycleFinder.FindAdjacantCicles(cycles, nodeId => childrenDict[nodeId].Type == Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE, instanceId => childrenDict[instanceId].Position);
         CreateFea(adj, childrenDict, spawnee, pos.rotation);
-        
+
     }
 };

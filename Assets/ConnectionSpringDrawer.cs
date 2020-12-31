@@ -8,7 +8,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     public float spring;
     public float damp;
 
-    Dictionary<(int, int), SpringJoint> springs = new Dictionary<(int, int), SpringJoint>();
+    Dictionary<(int, int), CustomSpringJoint> springs = new Dictionary<(int, int), CustomSpringJoint>();
     HashSet<(int, int)> eliminated = new HashSet<(int, int)>();
     // Start is called before the first frame update
     public override void Start()
@@ -22,50 +22,24 @@ public class ConnectionSpringDrawer : ConnectionDrawer
         base.Update();
     }
 
-    public override void AddConnection(GameObject a, GameObject b)
-    {
-        base.AddConnection(a, b);
-
-        if (!springs.ContainsKey((b.GetInstanceID(), a.GetInstanceID())) &&
-            !springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
-        {
-            var sj = a.AddComponent<SpringJoint>();
-            sj.connectedBody = b.GetComponent<Rigidbody>();
-            sj.spring = this.spring;
-            sj.damper = this.damp;
-            springs[(a.GetInstanceID(), b.GetInstanceID())] = sj;
-        }
-    }
-
 
     public void AddConnectionWithAnchor(GameObject a, GameObject b, Tuple<float, float> aPos, Tuple<float, float> bPos)
     {
-        this.AddConnection(a, b);
+        var d = TopologyFunctions.Distance(aPos, bPos);
+        this.DrawConnection(a, b);
 
-        SpringJoint sj;
-        if (springs.ContainsKey((b.GetInstanceID(), a.GetInstanceID())))
-        {
-            sj = springs[(b.GetInstanceID(), a.GetInstanceID())];
-        }
-        else
-        {
-            sj = springs[(a.GetInstanceID(), b.GetInstanceID())];
-        }
+        //CustomSpringJoint sj = this.getSpringJoint(a,b);
 
-        var baseObjectTransform = a.gameObject.GetComponent<Transform>();
+        //var baseObjectTransform = a.gameObject.GetComponent<Transform>();
+        var csj = a.AddComponent<ByLengthCustomSpringJoint>();
+        csj.connectedBody = b;
+        csj.restSize = d;
+        Debug.Log(d);
 
-        var anchor = new Vector3((bPos.Item1 - aPos.Item1) / baseObjectTransform.lossyScale.x, 0, (bPos.Item2 - aPos.Item2) / baseObjectTransform.lossyScale.z);
-        anchor = Vector3.Scale(anchor, baseObjectTransform.lossyScale);
-        
-        // sj.anchor = Vector3.zero;
-        // sj.connectedAnchor = anchor;
-
-        var csj = sj.gameObject.AddComponent<CustomSpringJoint>();
-        csj.realAnchor = anchor;
     }
 
 
-    public SpringJoint getSpringJoint(GameObject a, GameObject b)
+    public CustomSpringJoint getSpringJoint(GameObject a, GameObject b)
     {
         if (springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
         {
@@ -84,9 +58,9 @@ public class ConnectionSpringDrawer : ConnectionDrawer
 
     public void eliminateSpringJoint(GameObject a, GameObject b)
     {
-        var sj = getSpringJoint(a, b);
-        sj.damper = 0;
-        sj.spring = 0;
+        var sj = this.getSpringJoint(a, b);
+        //sj.damper = 0;
+        //sj.spring = 0;
 
         var t = (a.GetInstanceID(), b.GetInstanceID());
         if (!springs.ContainsKey(t))

@@ -13,7 +13,7 @@ public class ConnectionDrawer : MonoBehaviour
     //public bool ColorStresses;
     public Vector3 drawOffset;
 
-    virtual public void AddConnection(GameObject a, GameObject b)
+    virtual public void DrawConnection(GameObject a, GameObject b)
     {
         var line = new GameObject("drawed-" + Guid.NewGuid().ToString("N").Substring(0, 6));
         var lr = line.AddComponent<LineRenderer>();
@@ -53,7 +53,7 @@ public class ConnectionDrawer : MonoBehaviour
             return false;
         }
     }
-    // Start is called before the first frame update
+
     virtual public void Start()
     {
         var drawContainer = GameObject.Find("DrawObjects");
@@ -64,7 +64,6 @@ public class ConnectionDrawer : MonoBehaviour
         parentTransform = drawContainer.transform;
     }
 
-    // Update is called once per frame
     virtual public void Update()
     {
         foreach (var keyVal in connections)

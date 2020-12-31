@@ -252,7 +252,7 @@ public class TopologyFunctions
     {
         return ((a.Item1 - b.Item1) * (a.Item1 - b.Item1) + (a.Item2 - b.Item2) * (a.Item2 - b.Item2));
     }
-    private static float Distance(Tuple<float, float> a, Tuple<float, float> b)
+    public static float Distance(Tuple<float, float> a, Tuple<float, float> b)
     {
         return (float)Math.Sqrt(DistanceSquared(a, b));
     }
