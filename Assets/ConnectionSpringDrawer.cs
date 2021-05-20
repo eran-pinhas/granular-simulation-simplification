@@ -65,13 +65,9 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     public SpringJoint getSpringJoint(GameObject a, GameObject b)
     {
         if (springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
-        {
             return springs[(a.GetInstanceID(), b.GetInstanceID())];
-        }
         else
-        {
             return springs[(b.GetInstanceID(), a.GetInstanceID())];
-        }
     }
 
     public HashSet<(int, int)> getEliminated()
@@ -79,7 +75,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
         return eliminated;
     }
 
-    public void eliminateSpringJoint(GameObject a, GameObject b)
+    public void EliminateSpringJoint(GameObject a, GameObject b)
     {
         var sj = getSpringJoint(a, b);
         sj.damper = 0;
