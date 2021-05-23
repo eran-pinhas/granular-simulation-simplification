@@ -38,7 +38,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     }
 
 
-    public void AddConnectionWithAnchor(GameObject a, GameObject b, Tuple<float, float> aPos, Tuple<float, float> bPos)
+    public void AddConnectionWithAnchor(GameObject a, GameObject b, Tuple<float, float> diff)
     {
         this.AddConnection(a, b);
 
@@ -54,7 +54,7 @@ public class ConnectionSpringDrawer : ConnectionDrawer
 
         var baseObjectTransform = a.gameObject.GetComponent<Transform>();
 
-        var anchor = new Vector3((bPos.Item1 - aPos.Item1) / baseObjectTransform.lossyScale.x, 0, (bPos.Item2 - aPos.Item2) / baseObjectTransform.lossyScale.z);
+        var anchor = new Vector3(diff.Item1 / baseObjectTransform.lossyScale.x, 0, diff.Item2 / baseObjectTransform.lossyScale.z);
         anchor = Vector3.Scale(anchor, baseObjectTransform.lossyScale);
 
         sj.anchor = Vector3.zero;

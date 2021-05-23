@@ -351,7 +351,7 @@ public class CycleFinder
                 pol.Add(test_current);
             }
             //new Dictionary<int,bool> 
-            var test_polSet = new HashSet<int>(pol.Distinct());
+            var test_polSet = new HashSet<int>(pol);
             polygons.Add(new ElementGroupPolygon()
             {
                 polygon = pol,

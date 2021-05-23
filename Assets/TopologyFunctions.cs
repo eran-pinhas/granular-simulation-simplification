@@ -53,16 +53,6 @@ public class TopologyFunctions
             );
     }
 
-    public static List<T> LongestString<T>(List<List<T>> strings)
-    {
-        var longestString = strings.First();
-        for (int i = 1; i < strings.Count; i++)
-            if (strings[i].Count > longestString.Count)
-                longestString = strings[i];
-
-        return longestString;
-    }
-
     public static Tuple<Tuple<float, float>, Tuple<float, float>> ExtactExtent(List<Tuple<float, float>> points)
     {
         var xList = points.Select(p => p.Item1);
@@ -162,6 +152,23 @@ public class TopologyFunctions
         return (val > 0) ? 1 : 2; // clock or counterclock wise 
     }
 
+    private static Point ToPoint(Tuple<float, float> t)
+    {
+        return new Point() { x = t.Item1, y = t.Item2 };
+    }
+    public static bool DoIntersect2(Tuple<float, float> p1, Tuple<float, float> q1, Tuple<float, float> p2, Tuple<float, float> q2)
+    {
+        return doIntersect(ToPoint(p1), ToPoint(q1), ToPoint(p2), ToPoint(q2));
+    }
+    public static Tuple<float, float> Substract(Tuple<float, float> a, Tuple<float, float> b)
+    {
+        return new Tuple<float, float>(a.Item1 - b.Item1, a.Item2 - b.Item2);
+    }
+    public static Tuple<float, float> Scale(Tuple<float, float> a, float k)
+    {
+        return new Tuple<float, float>(a.Item1 * k, a.Item2 * k);
+    }
+
     // The function that returns true if line segment 'p1q1' 
     // and 'p2q2' intersect. 
     private static bool doIntersect(Point p1, Point q1, Point p2, Point q2)
@@ -212,8 +219,8 @@ public class TopologyFunctions
 
         var bufferInsideSquared = bufferInside * bufferInside;
         int n = inPolygon.Count;
-        var polygon = inPolygon.Select(t => new Point() { x = t.Item1, y = t.Item2 }).ToList();
-        var p = new Point() { x = pIn.Item1, y = pIn.Item2 };
+        var polygon = inPolygon.Select(ToPoint).ToList();
+        var p = ToPoint(pIn);
         // There must be at least 3 vertices in polygon[] 
         if (n < 3) return false;
 
@@ -248,13 +255,25 @@ public class TopologyFunctions
         return count % 2 == 1;  // Same as (count%2 == 1) 
     }
 
+    public static Tuple<float, float> CenterOf(Tuple<float, float> a, Tuple<float, float> b)
+    {
+        return new Tuple<float, float>((a.Item1 + b.Item1) / 2, (a.Item2 + b.Item2) / 2);
+    }
     private static float DistanceSquared(Tuple<float, float> a, Tuple<float, float> b)
     {
         return ((a.Item1 - b.Item1) * (a.Item1 - b.Item1) + (a.Item2 - b.Item2) * (a.Item2 - b.Item2));
     }
-    private static float Distance(Tuple<float, float> a, Tuple<float, float> b)
+    public static float Distance(Tuple<float, float> a, Tuple<float, float> b)
     {
         return (float)Math.Sqrt(DistanceSquared(a, b));
+    }
+    public static float DistanceLineToPoint(Tuple<float, float> lineA, Tuple<float, float> lineB, Tuple<float, float> point)
+    {
+        // https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line
+        var (x0, y0) = point;
+        var (x1, y1) = lineA;
+        var (x2, y2) = lineB;
+        return Math.Abs((x2 - x1) * (y1 - x0) - (x1 - x0) * (y2 - x1)) / Distance(lineA, lineB);
     }
 
     public static List<ValueTuple<int, int>> ConnectOuterPolygonToMesh(List<Tuple<float, float>> polygon, Mesh mesh)
