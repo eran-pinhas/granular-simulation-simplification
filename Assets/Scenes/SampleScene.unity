@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 170076734}
-  m_IndirectSpecularColor: {r: 0.4465785, g: 0.49641252, b: 0.574817, a: 1}
+  m_IndirectSpecularColor: {r: 0.44657826, g: 0.49641263, b: 0.57481676, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -1721,9 +1721,10 @@ MonoBehaviour:
   bufferInside: 0.8
   minStringSize: 70
   PPTestMin: 0.3
-  maxForce: 1300
-  propagateMaxForce: 70
+  maxForce: 1.02
+  propagateMaxForce: 1
   adaptation: 0.2
+  springK: 10000
   reporter: {fileID: 2097349680}
   spawnee: {fileID: 8562859477550952187, guid: 4477357020d71244d9e2c552d1068fb8, type: 3}
   pos: {fileID: 15300817}

@@ -26,28 +26,29 @@ public class Creator : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (createdCount < NumOfElements && DateTime.Now.Subtract(lastTimeCreated).TotalMilliseconds > WaitTime)
+        for (var i = 0;i < 2; i++)
         {
-            lastTimeCreated = DateTime.Now;
-            createdCount++;
-            var name = String.Format("Particle {0}", createdCount);
+            if (createdCount < NumOfElements && DateTime.Now.Subtract(lastTimeCreated).TotalMilliseconds > WaitTime)
+            {
+                lastTimeCreated = DateTime.Now;
+                createdCount++;
+                var name = String.Format("Particle {0}", createdCount);
 
-            var particle = Particle.Generate(
-                spanee,
-                pos.position + new Vector3((float)(RandPart.x * rand.NextDouble()), (float)(RandPart.y * rand.NextDouble()), (float)(RandPart.z * rand.NextDouble())),
-                pos.rotation,
-                name,
-                this.fea);
+                var particle = Particle.Generate(
+                    spanee,
+                    pos.position + new Vector3((float)(RandPart.x * rand.NextDouble()), (float)(RandPart.y * rand.NextDouble()), (float)(RandPart.z * rand.NextDouble())),
+                    pos.rotation,
+                    name,
+                    this.fea);
 
-            var go = particle.gameObject;
+                var go = particle.gameObject;
 
-            particle.setAsFree();
+                particle.setAsFree();
 
-            go.transform.localScale += scaleRandomPart * (float)rand.NextDouble();
+                go.transform.localScale += scaleRandomPart * (float)rand.NextDouble();
 
-            fea.informNewChild(particle);
+                fea.informNewChild(particle);
+            }
         }
-
-
     }
 }

@@ -164,10 +164,60 @@ public class TopologyFunctions
     {
         return new Tuple<float, float>(a.Item1 - b.Item1, a.Item2 - b.Item2);
     }
+    public static Tuple<float, float> Add(Tuple<float, float> a, Tuple<float, float> b)
+    {
+        return new Tuple<float, float>(a.Item1 + b.Item1, a.Item2 + b.Item2);
+    }
+    public static Tuple<float, float> Normalize(Tuple<float, float> a)
+    {
+        var d = Distance(new Tuple<float, float>(0, 0), a);
+        return new Tuple<float, float>(a.Item1 /d , a.Item2 /d);
+    }
     public static Tuple<float, float> Scale(Tuple<float, float> a, float k)
     {
         return new Tuple<float, float>(a.Item1 * k, a.Item2 * k);
     }
+
+    public static T MaxBy<T>(IEnumerable<T> a, Func<T, float> acti) where T : class
+    {
+        Debug.Assert(a.Count() != 0, "a.Count() is 0");
+        var res = a.Aggregate((null as T, float.MinValue), (prev, next) =>
+        {
+            var s = acti(next);
+            return s > prev.Item2 ? (next, s) : prev;
+        });
+        return res.Item1;
+    }
+
+
+    public static IEnumerable<Tuple<float, float>> GetPathEvery(IEnumerable<Tuple<float, float>> path, float interval)
+    {
+
+        var res = path.Aggregate((0f, null as Tuple<float, float>, new List<Tuple<float, float>>()), (prev, currentPoint) =>
+        {
+            var leftFromLastSection = prev.Item1;
+            var lastPoint = prev.Item2;
+            var results = prev.Item3;
+            if (lastPoint == null)
+                return (0, currentPoint, results);
+            else
+            {
+                var currentP = -leftFromLastSection;
+                var d = Distance(lastPoint, currentPoint);
+                var direction = Normalize( Substract(currentPoint, lastPoint));
+                while(currentP+ interval <= d)
+                {
+                    currentP += interval;
+                    results.Add(Add(lastPoint, Scale(direction, currentP)));
+                }
+                return (d - currentP, currentPoint, results);
+            }
+        });
+        return res.Item3;
+    }
+
+
+
 
     // The function that returns true if line segment 'p1q1' 
     // and 'p2q2' intersect. 

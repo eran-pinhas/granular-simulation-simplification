@@ -259,7 +259,13 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                  this.connectionSpringDrawer)
                 );
         }
-        foreach (var (polygonConnectionIndex, meshConnectionIndex) in polygonMeshLinks.Distinct())
+
+
+        // Weird way do have things distinct
+        var distinctPolygonMeshLinks = polygonMeshLinks
+            .GroupBy(p => string.Format("{0}_{1}", polygonGameObjects[p.Item1].Id, fea.innerMeshElements[mesh.positions[p.Item2]].GetInstanceID()))
+            .Select(group => group.First());
+        foreach (var (polygonConnectionIndex, meshConnectionIndex) in distinctPolygonMeshLinks)
         {
             var toPoint = mesh.positions[meshConnectionIndex];
             fea.outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint()
@@ -736,8 +742,8 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         tailToHeadSeamPositions.Reverse();
 
         // IMPORTANT exectute before dismantling
-        var egp1 = HandleGroupAssemply(fea, headToTailIndicesRange, tailToHeadSeamPositions);
-        var egp2 = HandleGroupAssemply(fea, tailToHeadIndicesRange, headToTailSeamPositions);
+        var egp1 = HandleGroupAssembly(fea, headToTailIndicesRange, tailToHeadSeamPositions);
+        var egp2 = HandleGroupAssembly(fea, tailToHeadIndicesRange, headToTailSeamPositions);
 
         DismantleFEA(fea);
 
@@ -746,7 +752,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     }
 
 
-    private CycleFinder.ElementGroupPolygon HandleGroupAssemply(
+    private CycleFinder.ElementGroupPolygon HandleGroupAssembly(
         ElementGroupGameObject fea,
         (int, int) range,
         List<Tuple<float, float>> seamEndToStart_inRS
@@ -766,22 +772,18 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
 
         var elementsInside = fea.hiddenNodes.Where(p => TopologyFunctions.PointInPolygon(extendedPolygon_inRS, p.lastPosition, 0f));
-        ;
-        var newEdgeElements = elementsInside.Where(particleInside => seamEndToStart_inRS.Where((p2, i) =>
+
+        var pointsAlongSeem = TopologyFunctions.GetPathEvery(seamEndToStart_inRS, .9f);
+        var newEdgeElements = new List<ElementGroupGameObject.HiddenNodes>();
+        var newEdgeElementsHashSet = new HashSet<ElementGroupGameObject.HiddenNodes>();
+        foreach (var pointInSeem in pointsAlongSeem)
         {
-            if (i == 0) return false;
-            var p1 = seamEndToStart_inRS[i - 1];
-            return TopologyFunctions.Distance(p1, particleInside.lastPosition) < 3.5 &&
-                TopologyFunctions.Distance(p1, particleInside.lastPosition) < 3.5 &&
-                TopologyFunctions.DistanceLineToPoint(p1, p2, particleInside.lastPosition) < 0.4;
-        }).Count() > 0
-            )
-            .ToList();
-
-        // TODO RMEOVE
-        var last = seamEndToStart_inRS.Last();
-        newEdgeElements.Sort((p1, p2) => TopologyFunctions.Distance(p1.lastPosition, last) < TopologyFunctions.Distance(p2.lastPosition, last) ? -1 : 1);
-
+            var particlesNotAlreadyInList = elementsInside.Where(insideP => !newEdgeElementsHashSet.Contains(insideP));
+            var p = TopologyFunctions.MaxBy(particlesNotAlreadyInList, insideP => -TopologyFunctions.Distance(pointInSeem, insideP.lastPosition));
+            newEdgeElements.Add(p);
+            newEdgeElementsHashSet.Add(p);
+        }
+ 
         // first and last should be the same
         var allPolygon = new List<ElementGroupGameObject.PolygonElement>(elementsString);
         allPolygon.AddRange(newEdgeElements.Select(ee => new ElementGroupGameObject.PolygonElement()
