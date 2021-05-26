@@ -36,18 +36,18 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             public Tuple<float, float> fromPoint;
             public Tuple<float, float> toPoint;
             private ConnectionSpringDrawer csd;
-            private bool eliminated;
+            public bool isEliminated;
 
             public float displacementRatio = 0;
             public float lastDeltaL = 0;
             public List<float> kComponents = new List<float>();
 
-            public void ExpandJoint()
+            public void EliminateAndExpandJoint()
             {
-                Debug.Assert(!eliminated);
+                Debug.Assert(!isEliminated);
                 csd.RemoveConnection(objs.Item1, objs.Item2);
-                csd.AddConnectionWithAnchor(objs.Item1, objs.Item2, TopologyFunctions.Scale(TopologyFunctions.Substract(toPoint, fromPoint), 1.1f));
-                eliminated = true;
+                csd.AddConnectionWithAnchor(objs.Item1, objs.Item2, TopologyFunctions.Scale(TopologyFunctions.Substract(toPoint, fromPoint), 1.5f));
+                isEliminated = true;
             }
 
             public void InitForceAggregation()
@@ -74,12 +74,6 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             {
                 var con_spring = drawer.getSpringJoint(objs.Item1, objs.Item2);
                 con_spring.spring = k;
-            }
-
-            internal void EliminateJoint(ConnectionSpringDrawer connectionSpringDrawer)
-            {
-                connectionSpringDrawer.EliminateSpringJoint(objs.Item1, objs.Item2);
-                this.ExpandJoint();
             }
         }
         public class OuterSpringJoint
@@ -538,16 +532,6 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         FEAs.ForEach(fea => fea.lineDrawer.setPoints(fea.currentPolygon.Select(x => childrenDict[x.instanceId])));
     }
 
-    private bool IsInnerJoinEliminated(ElementGroupGameObject.InnerSpringJoint ij)
-    {
-        return connectionSpringDrawer.getEliminated().Contains((ij.objs.Item1.GetInstanceID(), ij.objs.Item2.GetInstanceID()));
-    }
-
-    private void EliminateInnerJoint(ElementGroupGameObject.InnerSpringJoint ij)
-    {
-        ij.EliminateJoint(connectionSpringDrawer);
-    }
-
     public void ColorizeMesh()
     {
         FEAs.ForEach(fea =>
@@ -556,18 +540,18 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             {
                 var displacementRatio = ij.displacementRatio;
                 Color col = Color.white;
-                if (IsInnerJoinEliminated(ij))
+                if (ij.isEliminated)
                 {
                     col = Color.black;
                 }
-                // push 
                 else if (displacementRatio < 1)
                 {
+                    // push 
                     col = Color.green;
                 }
-                // pull
                 else
                 {
+                    // pull
                     float colorS = Mathf.Min(1, (displacementRatio - 1) * 10);
                     col = Color.HSVToRGB(0, colorS, 1);
                 }
@@ -590,7 +574,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         {
             var displacementRatio = ij.displacementRatio;
             var feaMaxForce = fea.status == ElementGroupGameObject.STATUS.FREE ? maxForce : propagateMaxForce;
-            if (!hadChange && displacementRatio > feaMaxForce && !IsInnerJoinEliminated(ij))
+            if (!hadChange && displacementRatio > feaMaxForce && !ij.isEliminated)
             {
                 if (fea.status != ElementGroupGameObject.STATUS.CRACKING)
                 {
@@ -601,7 +585,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                     Debug.Assert(!fea.crackItems.Any());
                     fea.crackItems.Add(ij);
 
-                    EliminateInnerJoint(ij);
+                    ij.EliminateAndExpandJoint();
                     fea.lineDrawer.setColor(Color.red);
                     //SingleFEAData.innerLinks.Remove(ij);
                     //connectionSpringDrawer.RemoveConnection(ij.objs.Item1, ij.objs.Item2);
@@ -612,14 +596,14 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                     if (ShouldContinuePropogate(fea.crackItems.Last(), ij, fea).Item1)
                     {
                         fea.crackItems.Add(ij);
-                        EliminateInnerJoint(ij);
+                        ij.EliminateAndExpandJoint();
                         crackContinued = true;
                     }
                     else if (ShouldContinuePropogate(fea.crackItems.First(), ij, fea).Item1)
                     {
 
                         fea.crackItems.Insert(0, ij);
-                        EliminateInnerJoint(ij);
+                        ij.EliminateAndExpandJoint();
                         crackContinued = true;
                     }
                     else
@@ -823,7 +807,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             var mutualOne = items.Except(new HashSet<Tuple<float, float>>() { newOne, endOne }).Single();
 
             // if propagates from connection 1-2 to 2-3 we would like to have the 1-3 connection
-            var nextIsConnectedToPrevious = fea.innerLinks.Any(ij => isEqualOrSwitched((ij.fromPoint, ij.toPoint), (newOne, endOne)) && !IsInnerJoinEliminated(ij));
+            var nextIsConnectedToPrevious = fea.innerLinks.Any(ij => isEqualOrSwitched((ij.fromPoint, ij.toPoint), (newOne, endOne)) && !ij.isEliminated);
             if (nextIsConnectedToPrevious)
             {
                 var itemsWithoutCurrent = new HashSet<Tuple<float, float>>(items);
@@ -944,7 +928,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 var ilK = il.kComponents.Average();
 
                 var boundIlK = Math.Max(Math.Min(ilK, 1.2 * springK), 0.8 * springK);
-                float finalK = IsInnerJoinEliminated(il) ? springK : (float)boundIlK;
+                float finalK = il.isEliminated ? springK : (float)boundIlK;
                 il.UpdateK(connectionSpringDrawer, finalK);
             });
         });

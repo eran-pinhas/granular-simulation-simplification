@@ -9,7 +9,6 @@ public class ConnectionSpringDrawer : ConnectionDrawer
     public float damp;
 
     Dictionary<(int, int), SpringJoint> springs = new Dictionary<(int, int), SpringJoint>();
-    HashSet<(int, int)> eliminated = new HashSet<(int, int)>();
     // Start is called before the first frame update
     public override void Start()
     {
@@ -70,26 +69,6 @@ public class ConnectionSpringDrawer : ConnectionDrawer
             return springs[(b.GetInstanceID(), a.GetInstanceID())];
     }
 
-    public HashSet<(int, int)> getEliminated()
-    {
-        return eliminated;
-    }
-
-    public void EliminateSpringJoint(GameObject a, GameObject b)
-    {
-        var sj = getSpringJoint(a, b);
-        sj.damper = 0;
-        sj.spring = 0;
-
-        var t = (a.GetInstanceID(), b.GetInstanceID());
-        if (!springs.ContainsKey(t))
-        {
-            t = (b.GetInstanceID(), a.GetInstanceID());
-        }
-        eliminated.Add(t);
-
-    }
-
     public override bool RemoveConnection(GameObject a, GameObject b)
     {
         if (springs.ContainsKey((a.GetInstanceID(), b.GetInstanceID())))
@@ -97,7 +76,11 @@ public class ConnectionSpringDrawer : ConnectionDrawer
             Destroy(springs[(a.GetInstanceID(), b.GetInstanceID())]);
             springs.Remove((a.GetInstanceID(), b.GetInstanceID()));
         }
+        else
+        {
+            Destroy(springs[(b.GetInstanceID(), a.GetInstanceID())]);
+            springs.Remove((b.GetInstanceID(), b.GetInstanceID()));
+        }
         return base.RemoveConnection(a, b);
-
     }
 }
