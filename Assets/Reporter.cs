@@ -37,11 +37,11 @@ public class Reporter : MonoBehaviour
             var data = history.Last().data;
             if (data > 0)
             {
-                text.text = data.ToString();
+                text.text = ""; // data.ToString();
             }
             else
             {
-                text.text = "No Pull Forces";
+                text.text = ""; //No Pull Forces";
             }
         }
 

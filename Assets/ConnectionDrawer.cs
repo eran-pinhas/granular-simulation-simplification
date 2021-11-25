@@ -17,8 +17,9 @@ public class ConnectionDrawer : MonoBehaviour
     {
         var line = new GameObject("drawed-" + Guid.NewGuid().ToString("N").Substring(0, 6));
         var lr = line.AddComponent<LineRenderer>();
-        lr.startWidth = 0.2f;
-        lr.endWidth = 0.2f;
+        lr.startWidth = 0.1f;
+        lr.endWidth = 0.1f;
+        lr.material.color = new Color(0.32f, 0.466f, 0.83f, 0.5f);
 
         line.transform.parent = parentTransform;
 
