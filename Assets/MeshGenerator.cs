@@ -3,10 +3,257 @@ using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
+using System.IO;
+
 
 
 public class MeshGenerator : MonoBehaviour, ICollisionListener
 {
+    [Serializable]
+    public class JsonRepresenation
+    {
+        public int ParticleCounter;
+        public int createdCount;
+        public int FeasCounter;
+        public List<ParticleRepresentation> freeParticles;
+        public List<FEAGroupRepresentation> feas;
+        [Serializable]
+        public class XY
+        {
+            public XY(float _x, float _y)
+            {
+                this.x = _x;
+                this.y = _y;
+            }
+            public static XY fromTuple(Tuple<float, float> t)
+            {
+                return new XY(t.Item1, t.Item2);
+            }
+            public Tuple<float, float> toTuple()
+            {
+                return new Tuple<float, float>(this.x, this.y);
+            }
+            public float x;
+            public float y;
+        }
+        [Serializable]
+        public class ParticleRepresentation
+        {
+            public int id;
+            public XY position;
+            public int type;
+            public int particleGroupId;
+            public List<float> localScale;
+
+            public static ParticleRepresentation fromParticle(Particle p)
+            {
+                var ls = p.gameObject.transform.localScale;
+                return new ParticleRepresentation()
+                {
+                    id = p.Id,
+                    particleGroupId = p.particleGroupId,
+                    position = XY.fromTuple(p.Position),
+                    type = (int)p.Type,
+                    localScale = new List<float>() { ls.x, ls.y, ls.z }
+                };
+            }
+            public Particle revive(MeshGenerator that)
+            {
+                var p = Particle.Generate(that.createSpawnee, that.CreatepPos.position, that.CreatepPos.rotation, that);
+                p.gameObject.transform.localScale = new Vector3(localScale[0], localScale[1], localScale[2]);
+
+                p.Id = this.id;
+                p.Position = this.position.toTuple();
+
+                if (this.type == (int)Particle.PARTICLE_TYPE.PARTICLE) p.setAsFree();
+                else if (this.type == (int)Particle.PARTICLE_TYPE.FEM_HIDDEN_PARTICLE) p.setAsHidden(this.particleGroupId);
+                else if (this.type == (int)Particle.PARTICLE_TYPE.FEM_EDGE_PARTICLE) p.setSetAsEdge(this.particleGroupId);
+
+                that.informNewChild(p);
+                return p;
+
+            }
+        }
+        [Serializable]
+        public class HiddenNodesRepresentation
+        {
+            public ParticleRepresentation p;
+            public XY lastPosition;
+        }
+        [Serializable]
+        public class OuterSpringJointRepresentation
+        {
+            public int particleId;
+            public XY toPoint;
+        }
+        [Serializable]
+        public class InnerSpringJointRepresentation
+        {
+            public XY from;
+            public XY to;
+        }
+        [Serializable]
+        public class InnerMeshElementRepresentation
+        {
+            public XY pos;
+            public XY lastPos;
+        }
+        [Serializable]
+        public class PolygonElementRepresentation
+        {
+            public XY positionsInRootRS;
+            public ParticleRepresentation go;
+        }
+        [Serializable]
+        public class FEAGroupRepresentation
+        {
+            public List<HiddenNodesRepresentation> hiddenNodes;
+            public List<OuterSpringJointRepresentation> outerLinks;
+            public List<InnerSpringJointRepresentation> innerLinks;
+            public List<InnerMeshElementRepresentation> innerMeshElements;
+            public List<PolygonElementRepresentation> currentPolygon;
+            public int id;
+        }
+    }
+    public string ToJSON()
+    {
+        this.FEAs.ForEach(s => { Debug.Assert(s.status == ElementGroupGameObject.STATUS.FREE && s.crackItems.Count == 0); });
+        var rep = new JsonRepresenation()
+        {
+            FeasCounter = ElementGroupGameObject.currentId,
+            ParticleCounter = Particle.current_id,
+            createdCount = this.createdCount,
+            feas = FEAs.Select(fea => new JsonRepresenation.FEAGroupRepresentation()
+            {
+                currentPolygon = fea.currentPolygon.Select(pol => new JsonRepresenation.PolygonElementRepresentation()
+                {
+                    positionsInRootRS = JsonRepresenation.XY.fromTuple(pol.positionsInRootRS),
+                    go = JsonRepresenation.ParticleRepresentation.fromParticle(childrenDict[pol.instanceId]),
+                }).ToList(),
+                hiddenNodes = fea.hiddenNodes.Select(hn => new JsonRepresenation.HiddenNodesRepresentation()
+                {
+                    p = JsonRepresenation.ParticleRepresentation.fromParticle(hn.particle),
+                    lastPosition = JsonRepresenation.XY.fromTuple(hn.lastPosition),
+                }).ToList(),
+                innerLinks = fea.innerLinks.Select(il => new JsonRepresenation.InnerSpringJointRepresentation()
+                {
+                    from = JsonRepresenation.XY.fromTuple(il.fromPoint),
+                    to = JsonRepresenation.XY.fromTuple(il.toPoint),
+                }).ToList(),
+                innerMeshElements = fea.innerMeshElements.Select(ime => new JsonRepresenation.InnerMeshElementRepresentation()
+                {
+                    pos = JsonRepresenation.XY.fromTuple(ime.Key),
+                    lastPos = JsonRepresenation.XY.fromTuple(Particle.GetGOPos(ime.Value)),
+                }).ToList(),
+                outerLinks = fea.outerLinks.Select(ol => new JsonRepresenation.OuterSpringJointRepresentation()
+                {
+                    particleId = ol.particle.Id,
+                    toPoint = JsonRepresenation.XY.fromTuple(ol.toPoint),
+                }).ToList(),
+                id = fea.id,
+            }).ToList(),
+            freeParticles = this.children.Where(s => s.particleGroupId == -1).Select(p => JsonRepresenation.ParticleRepresentation.fromParticle(p)).ToList(),
+        };
+        return JsonUtility.ToJson(rep, true);
+    }
+
+    public void fromJson(string json)
+    {
+        Debug.Assert(ElementGroupGameObject.currentId == 1);
+        Debug.Assert(Particle.current_id == 0);
+        Debug.Assert(children.Count == 0);
+        var rep = JsonUtility.FromJson<JsonRepresenation>(json);
+
+        rep.feas.ForEach(fea =>
+        {
+            var currentPolygon = new List<ElementGroupGameObject.PolygonElement>();
+            var hiddenNodes = new List<ElementGroupGameObject.HiddenNodes>();
+            var innerMeshElements = new Dictionary<Tuple<float, float>, GameObject>();
+            var outerLinks = new List<ElementGroupGameObject.OuterSpringJoint>();
+            var innerLinks = new List<ElementGroupGameObject.InnerSpringJoint>();
+
+            var id2currentPolygon = new Dictionary<int, Particle>();
+
+            for (var i = 0; i < fea.currentPolygon.Count; i++)
+            {
+                var particle = fea.currentPolygon[i];
+                var isLast = i == fea.currentPolygon.Count - 1;
+                if (!isLast)
+                {
+                    var p = particle.go.revive(this);
+                    id2currentPolygon.Add(p.Id, p);
+                }
+
+                currentPolygon.Add(new ElementGroupGameObject.PolygonElement()
+                {
+                    instanceId = particle.go.id,
+                    positionsInRootRS = particle.positionsInRootRS.toTuple()
+                });
+            }
+
+            fea.hiddenNodes.ForEach(hn =>
+            {
+                var p = hn.p.revive(this);
+                hiddenNodes.Add(new ElementGroupGameObject.HiddenNodes()
+                {
+                    lastPosition = hn.lastPosition.toTuple(),
+                    particle = p,
+                });
+            });
+            fea.innerMeshElements.ForEach(ime =>
+            {
+                var go = CreateInnerMesh(ime.lastPos.toTuple(), spawnee, CreatepPos.rotation, feaContainer.transform);
+                innerMeshElements.Add(ime.pos.toTuple(), go);
+            });
+            fea.outerLinks.ForEach(ol =>
+            {
+                var toPoint = ol.toPoint.toTuple();
+                var particle = id2currentPolygon[ol.particleId];
+                outerLinks.Add(new ElementGroupGameObject.OuterSpringJoint()
+                {
+                    toPoint = toPoint,
+                    particle = particle,
+                    objs = (innerMeshElements[toPoint], id2currentPolygon[ol.particleId].gameObject)
+                });
+
+                this.connectionSpringDrawer.AddConnection(innerMeshElements[toPoint], id2currentPolygon[ol.particleId].gameObject);
+            });
+            fea.innerLinks.ForEach(il =>
+            {
+                var fromPoint = il.from.toTuple();
+                var toPoint = il.to.toTuple();
+                innerLinks.Add(new ElementGroupGameObject.InnerSpringJoint(
+                    fromPoint,
+                    toPoint,
+                    (innerMeshElements[fromPoint], innerMeshElements[toPoint]),
+                    this.connectionSpringDrawer
+                ));
+            });
+
+            var toFea = new ElementGroupGameObject()
+            {
+                currentPolygon = currentPolygon,
+                hiddenNodes = hiddenNodes,
+                innerMeshElements = innerMeshElements,
+                outerLinks = outerLinks,
+                innerLinks = innerLinks,
+            };
+            // overriding the accumilating id
+            toFea.id = fea.id;
+
+            this.FEAs.Add(toFea);
+        });
+
+        rep.freeParticles.ForEach(particleRep =>
+        {
+            particleRep.revive(this);
+        });
+
+        ElementGroupGameObject.currentId = rep.FeasCounter;
+        Particle.current_id = rep.ParticleCounter;
+        this.createdCount = rep.createdCount;
+    }
+
     public class ElementGroupGameObject
     {
         public class HiddenNodes
@@ -18,7 +265,8 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         public class InnerSpringJoint
         {
 
-            public InnerSpringJoint(Tuple<float, float> _fromPoint,
+            public InnerSpringJoint(
+                Tuple<float, float> _fromPoint,
                 Tuple<float, float> _toPoint,
                 ValueTuple<GameObject, GameObject> _objs,
                 ConnectionSpringDrawer _csd
@@ -107,7 +355,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         public Color color;
         public int id;
 
-        static int currentId = 1;
+        public static int currentId = 1;
 
         public ElementGroupGameObject()
         {
@@ -164,9 +412,10 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     public float propagateMaxForce = 0.05f;
     public float adaptation = 0.2f;
     public float springK = 10000;
+    public string sourceFile = "";
+    public string loadFile = "";
     public Reporter reporter;
     public GameObject spawnee;
-    public Transform pos;
     public ConnectionDrawer connectionDrawer;
 
     public Dictionary<int, Dictionary<int, bool>> collisions = new Dictionary<int, Dictionary<int, bool>>();
@@ -196,6 +445,18 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     void Start()
     {
         feaContainer = new GameObject("FEA_data");
+        if (loadFile != "")
+        {
+            string json = File.ReadAllText(@"C:\Users\eranp\saveddata\" + loadFile + ".json");
+            fromJson(json);
+        }
+    }
+    public void OnButtonPress()
+    {
+        var key = DateTime.Now.ToString("yyyy-MM-dd'T'HH-mm");
+        var json = ToJSON();
+        Debug.Log(key);
+        File.WriteAllText(@"C:\Users\eranp\saveddata\" + key + ".json", json);
     }
 
     private List<ElementGroupGameObject> FEAs = new List<ElementGroupGameObject>();
@@ -207,7 +468,6 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
     public bool CreateFeaObject(CycleFinder.ElementGroupPolygon polygon, bool v = false)
     {
-        var spawneeRotation = pos.rotation;
         List<Particle> polygonGameObjects = polygon.polygon.Select(ind => childrenDict[ind]).ToList();
         List<Tuple<float, float>> polygonPositions = polygonGameObjects.Select(p => p.Position).ToList();
 
@@ -240,7 +500,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
         foreach (var position in mesh.positions)
         {
-            fea.innerMeshElements.Add(position, CreateInnerMesh(position, spawnee, spawneeRotation, feaContainer.transform));
+            fea.innerMeshElements.Add(position, CreateInnerMesh(position, spawnee, CreatepPos.rotation, feaContainer.transform));
         }
         foreach (var connection in mesh.links)
         {
@@ -296,7 +556,6 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
     }
     public void MaintainFea(List<CycleFinder.ElementGroupPolygon> groupPolygons)
     {
-        var spawneeRotation = pos.rotation;
         var changed = false;
 
         // Maintain existing FEAs
@@ -494,7 +753,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
                 foreach (var p_t in innerMesh_add)
                 {
                     var position = TopologyFunctions.TranformPoint(tranformMatrix, p_t);
-                    fea.innerMeshElements.Add(p_t, CreateInnerMesh(TopologyFunctions.TranformPoint(tranformMatrix, position), spawnee, spawneeRotation, feaContainer.transform));
+                    fea.innerMeshElements.Add(p_t, CreateInnerMesh(TopologyFunctions.TranformPoint(tranformMatrix, position), spawnee, CreatepPos.rotation, feaContainer.transform));
                 }
                 // (3)
                 foreach (var (p1, p2) in innerLinks_add)
@@ -525,7 +784,8 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         });
 
         foreach (var polygon in groupPolygons)
-            if (!changed)
+            // TODO remove <1
+            if (!changed && FEAs.Count < 1)
                 changed = CreateFeaObject(polygon);
 
 
@@ -613,7 +873,6 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
 
                     if (crackContinued)
                     {
-
                         var crackEnd = fea.crackItems.Last();
                         var crackStart = fea.crackItems.First();
                         hadChange = true;
@@ -767,7 +1026,7 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
             newEdgeElements.Add(p);
             newEdgeElementsHashSet.Add(p);
         }
- 
+
         // first and last should be the same
         var allPolygon = new List<ElementGroupGameObject.PolygonElement>(elementsString);
         allPolygon.AddRange(newEdgeElements.Select(ee => new ElementGroupGameObject.PolygonElement()
@@ -900,8 +1159,47 @@ public class MeshGenerator : MonoBehaviour, ICollisionListener
         return allTriangles;
     }
 
+
+    static System.Random rand = new System.Random();
+    int createdCount = 0;
+    DateTime lastTimeCreated;
+
+    // particle creator params
+    public GameObject createSpawnee;
+    public Transform CreatepPos;
+    public int CreateNumOfElements;
+    public int CreateWaitTime;
+    public Vector3 CreateRandPart;
+    public Vector3 CreateScaleRandomPart;
+
+    void checkForNewElementCreation()
+    {
+        for (var i = 0; i < 2; i++)
+        {
+            if (createdCount < CreateNumOfElements && DateTime.Now.Subtract(lastTimeCreated).TotalMilliseconds > CreateWaitTime)
+            {
+                lastTimeCreated = DateTime.Now;
+                createdCount++;
+
+                var particle = Particle.Generate(
+                    createSpawnee,
+                    CreatepPos.position + new Vector3((float)(CreateRandPart.x * rand.NextDouble()), (float)(CreateRandPart.y * rand.NextDouble()), (float)(CreateRandPart.z * rand.NextDouble())),
+                    CreatepPos.rotation,
+                    this);
+
+                particle.setAsFree();
+
+                particle.gameObject.transform.localScale += CreateScaleRandomPart * (float)rand.NextDouble();
+
+                this.informNewChild(particle);
+            }
+        }
+    }
     void Update()
     {
+        checkForNewElementCreation();
+        // Debug.Log(string.Format("{0} {1}", childrenDict.Count,FEAs.Sum(fea=>fea.hiddenNodes.Count())));
+
         FEAs.ForEach(fea =>
         {
             fea.lineDrawer.updatePositions();
