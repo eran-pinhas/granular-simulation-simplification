@@ -774,7 +774,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &828485745
 Transform:
   m_ObjectHideFlags: 0
@@ -1809,7 +1809,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1953332381
 Transform:
   m_ObjectHideFlags: 0
@@ -1903,13 +1903,12 @@ MonoBehaviour:
   meshSize: 3.5
   bufferInside: 0.8
   minStringSize: 70
-  PPTestMin: 0.3
+  PPTestMin: 0.2
   maxForce: 1.02
   propagateMaxForce: 1.002
   adaptation: 0.2
-  springK: 10000
-  sourceFile: 
-  loadFile: 2022-01-20T21-55
+  springK: 100000
+  loadFile: 2022-01-27T00-55
   reporter: {fileID: 2097349680}
   spawnee: {fileID: 8562859477550952187, guid: 4477357020d71244d9e2c552d1068fb8, type: 3}
   connectionDrawer: {fileID: 2097349682}
